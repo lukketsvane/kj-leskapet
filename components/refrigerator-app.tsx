@@ -1,11 +1,13 @@
-"use client";
+'use client';
+
 import React, { useState, useEffect } from 'react'
 import { useSwipeable } from 'react-swipeable'
-import { UserPlus, Plus, Camera, X, Home, Grid, List, Search, LogOut, Share2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { UserPlus, Plus, Camera, X, Home, Grid, List, Search, User, Share2, Loader2, ChevronLeft, ChevronRight, Menu, Trash2, Upload } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { createClient } from '@supabase/supabase-js'
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
@@ -24,15 +26,22 @@ export default function RefrigeratorApp() {
   const [showDelerom, setShowDelerom] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
   const [showFoodSearch, setShowFoodSearch] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
+  const [showConnectedKjoleskaps, setShowConnectedKjoleskaps] = useState(false)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [isGridView, setIsGridView] = useState(true)
-  const [users, setUsers] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [foodItems, setFoodItems] = useState<any[]>([])
   const [allFoodItems, setAllFoodItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [switchingKjoleskap, setSwitchingKjoleskap] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [session, setSession] = useState<any>(null)
+  const [newFoodItem, setNewFoodItem] = useState({ name: '', category: '', calories: 0 })
+  const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false)
+  const [showRemoveKjoleskapConfirmation, setShowRemoveKjoleskapConfirmation] = useState(false)
+  const [kjoleskapToRemove, setKjoleskapToRemove] = useState<any>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const { toast } = useToast()
 
   const handlers = useSwipeable({
@@ -45,7 +54,6 @@ export default function RefrigeratorApp() {
       setSession(session)
       if (session) {
         fetchKjoleskaps()
-        fetchUsers()
         fetchAllFoodItems()
       }
     })
@@ -56,7 +64,6 @@ export default function RefrigeratorApp() {
       setSession(session)
       if (session) {
         fetchKjoleskaps()
-        fetchUsers()
         fetchAllFoodItems()
       }
     })
@@ -76,7 +83,7 @@ export default function RefrigeratorApp() {
       const { data, error } = await supabase
         .from('kjoleskaps')
         .select('*')
-        .eq('user_id', user.id)
+        .or(`user_id.eq.${user.id},is_shared.eq.true`)
       
       if (error) throw error
 
@@ -84,7 +91,7 @@ export default function RefrigeratorApp() {
         setCurrentKjoleskaps(data)
         fetchFoodItems(data[0].id)
       } else {
-        const defaultKjoleskap = await createDefaultKjoleskap(user.id)
+        const defaultKjoleskap = await createDefaultKjoleskap(user.id, user.email)
         setCurrentKjoleskaps([defaultKjoleskap])
         fetchFoodItems(defaultKjoleskap.id)
       }
@@ -100,11 +107,12 @@ export default function RefrigeratorApp() {
     }
   }
 
-  async function createDefaultKjoleskap(userId: string) {
+  async function createDefaultKjoleskap(userId: string, userEmail: string) {
     try {
+      const kjoleskapName = `${userEmail.split('@')[0]}s kjøleskap`
       const { data, error } = await supabase
         .from('kjoleskaps')
-        .insert([{ name: 'Mitt Kjøleskap', user_id: userId, is_shared: false }])
+        .insert([{ name: kjoleskapName, user_id: userId, is_shared: false }])
         .select()
       
       if (error) throw error
@@ -143,7 +151,6 @@ export default function RefrigeratorApp() {
       const { data, error } = await supabase
         .from('food_items')
         .select('*')
-        .is('kjoleskap_id', null)
       
       if (error) throw error
       setAllFoodItems(data || [])
@@ -157,30 +164,26 @@ export default function RefrigeratorApp() {
     }
   }
 
-  async function fetchUsers() {
-    try {
-      const { data, error } = await supabase.from('profiles').select('*')
-      if (error) throw error
-      setUsers(data || [])
-    } catch (error) {
-      console.error('Feil ved henting av brukere:', error)
-    }
-  }
-
-  const switchKjoleskap = (direction: number) => {
+  const switchKjoleskap = async (direction: number) => {
+    setSwitchingKjoleskap(true)
     const newIndex = (selectedKjoleskapIndex + direction + currentKjoleskaps.length) % currentKjoleskaps.length
     setSelectedKjoleskapIndex(newIndex)
-    fetchFoodItems(currentKjoleskaps[newIndex].id)
+    await fetchFoodItems(currentKjoleskaps[newIndex].id)
+    setSwitchingKjoleskap(false)
   }
 
   const toggleView = () => setIsGridView(!isGridView)
   const toggleDelerom = () => setShowDelerom(!showDelerom)
   const toggleCamera = () => setShowCamera(!showCamera)
   const toggleFoodSearch = () => setShowFoodSearch(!showFoodSearch)
+  const toggleProfile = () => setShowProfile(!showProfile)
+  const toggleConnectedKjoleskaps = () => setShowConnectedKjoleskaps(!showConnectedKjoleskaps)
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     setSession(null)
+    setShowProfile(false)
+    setShowLogoutConfirmation(false)
   }
 
   const handleAddFoodItem = async (item: any) => {
@@ -202,6 +205,32 @@ export default function RefrigeratorApp() {
       toast({
         title: "Feil",
         description: "Kunne ikke legge til matvare. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleAddNewFoodItem = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('food_items')
+        .insert([{ ...newFoodItem, kjoleskap_id: currentKjoleskaps[selectedKjoleskapIndex].id }])
+        .select()
+      
+      if (error) throw error
+      
+      setFoodItems([...foodItems, data[0]])
+      setAllFoodItems([...allFoodItems, data[0]])
+      setNewFoodItem({ name: '', category: '', calories: 0 })
+      toast({
+        title: "Suksess",
+        description: `${newFoodItem.name} ble lagt til i kjøleskapet.`,
+      })
+    } catch (error) {
+      console.error('Feil ved tillegging av ny matvare:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til ny matvare. Vennligst prøv igjen.",
         variant: "destructive",
       })
     }
@@ -236,9 +265,11 @@ export default function RefrigeratorApp() {
       const foodItem = foodItems.find(item => item.id === foodItemId)
       if (!foodItem) throw new Error('Matvare ikke funnet')
 
+      const { id, ...foodItemWithoutId } = foodItem
+
       const { data, error } = await supabase
         .from('food_items')
-        .insert([{ ...foodItem, id: undefined, kjoleskap_id: targetKjoleskapId }])
+        .insert([{ ...foodItemWithoutId, kjoleskap_id: targetKjoleskapId }])
         .select()
       
       if (error) throw error
@@ -247,6 +278,9 @@ export default function RefrigeratorApp() {
         title: "Suksess",
         description: `${foodItem.name} ble delt til det valgte kjøleskapet.`,
       })
+
+      // Refetch food items for the current kjøleskap
+      await fetchFoodItems(currentKjoleskaps[selectedKjoleskapIndex].id)
     } catch (error) {
       console.error('Feil ved deling av matvare:', error)
       toast({
@@ -257,6 +291,87 @@ export default function RefrigeratorApp() {
     }
   }
 
+  const removeKjoleskap = async (kjoleskapId: string) => {
+    try {
+      const { error } = await supabase
+        .from('kjoleskaps')
+        .delete()
+        .eq('id', kjoleskapId)
+      
+      if (error) throw error
+
+      setCurrentKjoleskaps(currentKjoleskaps.filter(k => k.id !== kjoleskapId))
+      if (currentKjoleskaps.length > 0) {
+        setSelectedKjoleskapIndex(0)
+        fetchFoodItems(currentKjoleskaps[0].id)
+      }
+      
+      toast({
+        title: "Suksess",
+        description: "Kjøleskapet ble fjernet.",
+      })
+    } catch (error) {
+      console.error('Feil ved fjerning av kjøleskap:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke fjerne kjøleskapet. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    } finally {
+      setShowRemoveKjoleskapConfirmation(false)
+      setKjoleskapToRemove(null)
+    }
+  }
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    const reader = new FileReader()
+    reader.onloadend = async () => {
+      const base64Image = reader.result as string
+      setCapturedImage(base64Image)
+
+      try {
+        const response = await fetch('/api/analyze-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image:  base64Image }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to analyze image')
+        }
+
+        const data = await response.json()
+        const detectedItems = data.items || []
+
+        for (const item of detectedItems) {
+          await handleAddFoodItem({ name: item, category: 'Detected', calories: 0 })
+        }
+
+        toast({
+          title: "Suksess",
+          description: `${detectedItems.length} matvarer ble lagt til fra bildet.`,
+        })
+      } catch (error) {
+        console.error('Error analyzing image:', error)
+        toast({
+          title: "Feil",
+          description: "Kunne ikke analysere bildet. Vennligst prøv igjen.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsUploading(false)
+        toggleCamera()
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
   const GridView = () => (
     <div className="grid grid-cols-2 gap-4 p-4">
       {foodItems.length === 0 ? (
@@ -265,6 +380,7 @@ export default function RefrigeratorApp() {
         foodItems.map((item) => (
           <div key={item.id} className="bg-white p-4 rounded-lg shadow">
             <div className="w-full h-24 bg-gray-200 rounded-md mb-2"></div>
+            
             <p className="text-sm font-semibold">{item.name}</p>
             <p className="text-xs text-gray-500">{item.calories} kalorier</p>
             <div className="flex justify-between mt-2">
@@ -342,10 +458,10 @@ export default function RefrigeratorApp() {
       <div className="bg-white p-4 rounded-lg w-80">
         <h2 className="text-lg font-bold mb-4">Del kjøleskap</h2>
         <div className="mb-4">
-          <Label htmlFor="user-select">Velg bruker å dele med:</Label>
-          <select id="user-select" className="w-full p-2 border rounded">
-            {users.map(user => (
-              <option key={user.id}   value={user.id}>{user.email}</option>
+          <Label htmlFor="kjoleskap-select">Velg kjøleskap å dele med:</Label>
+          <select id="kjoleskap-select" className="w-full p-2 border rounded">
+            {currentKjoleskaps.map(kjoleskap => (
+              <option key={kjoleskap.id} value={kjoleskap.id}>{kjoleskap.name}</option>
             ))}
           </select>
         </div>
@@ -360,13 +476,18 @@ export default function RefrigeratorApp() {
   const CameraScreen = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white p-4 rounded-lg">
-        <h2 className="text-lg font-bold mb-4">Ta bilde</h2>
+        <h2 className="text-lg font-bold mb-4">Last opp bilde</h2>
         <div className="mb-4">
-          <div className="w-64 h-64 bg-gray-200 rounded-lg"></div>
+          <Input
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            disabled={isUploading}
+          />
         </div>
         <div className="flex justify-end">
           <Button onClick={toggleCamera} className="mr-2">Avbryt</Button>
-          <Button>Ta bilde</Button>
+          {isUploading && <Loader2 className="animate-spin" />}
         </div>
       </div>
     </div>
@@ -397,10 +518,134 @@ export default function RefrigeratorApp() {
             ))
           }
         </div>
+        <div className="mb-4">
+          <h3 className="text-md font-semibold mb-2">Legg til ny matvare:</h3>
+          <Input
+            type="text"
+            placeholder="Navn"
+            value={newFoodItem.name}
+            onChange={(e) => setNewFoodItem({...newFoodItem, name: e.target.value})}
+            className="mb-2"
+          />
+          <Input
+            type="text"
+            placeholder="Kategori"
+            value={newFoodItem.category}
+            onChange={(e) => setNewFoodItem({...newFoodItem, category: e.target.value})}
+            className="mb-2"
+          />
+          <Input
+            type="number"
+            placeholder="Kalorier"
+            value={newFoodItem.calories}
+            onChange={(e) => setNewFoodItem({...newFoodItem, calories: parseInt(e.target.value) || 0})}
+            className="mb-2"
+          />
+          <Button onClick={handleAddNewFoodItem} className="w-full">Legg til ny matvare</Button>
+        </div>
         <div className="flex justify-end">
           <Button onClick={toggleFoodSearch}>Lukk</Button>
         </div>
       </div>
+    </div>
+  )
+
+  const ProfileScreen = () => (
+    <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+      <div className="max-w-md mx-auto p-4">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Profil</h2>
+          <Button onClick={toggleProfile} variant="ghost">
+            <X size={24} />
+          </Button>
+        </div>
+        <div className="mb-6">
+          <div className="w-32 h-32 bg-gray-200 rounded-full mx-auto mb-4"></div>
+          <h1 className="text-3xl font-bold text-center">{session?.user?.email?.split('@')[0] || 'Bruker'}</h1>
+          <p className="text-xl text-center text-gray-500">+ 4 200</p>
+          <p className="text-center text-gray-500">deler mat 1km</p>
+        </div>
+        <h3 className="text-xl font-semibold mb-4">{session?.user?.email?.split('@')[0] || 'Bruker'}s kjøleskap</h3>
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {[...Array(9)].map((_, i) => (
+            <div key={i} className="bg-gray-200 aspect-square rounded-md"></div>
+          ))}
+        </div>
+        <Dialog open={showLogoutConfirmation} onOpenChange={setShowLogoutConfirmation}>
+          <DialogTrigger asChild>
+            <Button variant="destructive" className="w-full">Logg ut</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Er du sikker på at du vil logge ut?</DialogTitle>
+              <DialogDescription>
+                Du vil bli logget ut av appen og må logge inn igjen for å få tilgang.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowLogoutConfirmation(false)}>Avbryt</Button>
+              <Button variant="destructive" onClick={handleLogout}>Logg ut</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  )
+
+  const ConnectedKjoleskapsScreen = () => (
+    <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+      <div className="max-w-md mx-auto p-4">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Tilkoblede Kjøleskap</h2>
+          <Button onClick={toggleConnectedKjoleskaps} variant="ghost">
+            <X size={24} />
+          </Button>
+        </div>
+        <div className="mb-6">
+          {currentKjoleskaps.map((kjoleskap) => (
+            <div key={kjoleskap.id} className="flex justify-between items-center p-2 bg-gray-100 rounded-md mb-2">
+              <span>{kjoleskap.name}</span>
+              <div>
+                <Button onClick={() => {
+                  setSelectedKjoleskapIndex(currentKjoleskaps.findIndex(k => k.id === kjoleskap.id))
+                  toggleConnectedKjoleskaps()
+                }} className="mr-2">
+                  Velg
+                </Button>
+                <Button variant="destructive" onClick={() => {
+                  setKjoleskapToRemove(kjoleskap)
+                  setShowRemoveKjoleskapConfirmation(true)
+                }}>
+                  <Trash2 size={16} />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mb-6">
+          <h3 className="text-xl font-semibold mb-2">Søk etter kjøleskap</h3>
+          <Input
+            type="text"
+            placeholder="Søk etter kjøleskap..."
+            className="mb-2"
+          />
+          <Button className="w-full">Søk</Button>
+        </div>
+      </div>
+      <Dialog open={showRemoveKjoleskapConfirmation} onOpenChange={setShowRemoveKjoleskapConfirmation}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Er du sikker på at du vil fjerne dette kjøleskapet?</DialogTitle>
+            <DialogDescription>
+              Dette vil permanent fjerne kjøleskapet "{kjoleskapToRemove?.name}" og alle dets innhold.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setShowRemoveKjoleskapConfirmation(false)}>Avbryt</Button>
+            <Button variant="destructive" onClick={() => removeKjoleskap(kjoleskapToRemove?.id)}>Fjern</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 
@@ -428,6 +673,9 @@ export default function RefrigeratorApp() {
       <div className="flex-1 flex flex-col" {...handlers}>
         <div className="flex justify-between items-center p-4">
           <div className="flex items-center">
+            <button onClick={toggleConnectedKjoleskaps} className="mr-2">
+              <Menu size={24} />
+            </button>
             <button onClick={() => switchKjoleskap(-1)} className="mr-2">
               <ChevronLeft size={24} />
             </button>
@@ -439,47 +687,37 @@ export default function RefrigeratorApp() {
             </button>
           </div>
           <div className="flex gap-2">
-            <button onClick={toggleView} className="p-2 bg-white rounded-full shadow">
-              {isGridView ? <List size={20} /> : <Grid size={20} />}
-            </button>
-            <button onClick={handleLogout} className="p-2 bg-white rounded-full shadow">
-              <LogOut size={20} />
-            </button>
+            <button onClick={toggleView}>{isGridView ? <List size={24} /> : <Grid size={24} />}</button>
+            <button onClick={toggleProfile}><User size={24} /></button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
-          ) : error ? (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-red-500">{error}</p>
-            </div>
-          ) : (
-            isGridView ? <GridView /> : <ListView />
-          )}
-        </div>
-        {capturedImage && (
-          <div className="absolute bottom-20 right-4 w-24 h-24">
-            <img src={capturedImage} alt="Captured" className="w-full h-full object-cover rounded-lg" />
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="animate-spin" size={48} />
           </div>
+        ) : error ? (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-red-500">{error}</p>
+          </div>
+        ) : switchingKjoleskap ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="animate-spin" size={48} />
+          </div>
+        ) : (
+          isGridView ? <GridView /> : <ListView />
         )}
       </div>
-      <div className="flex justify-between items-center p-4 bg-gray-200 bg-opacity-50">
-        <button onClick={toggleDelerom}>
-          <UserPlus className="text-gray-700" size={24} />
-        </button>
-        <button onClick={toggleFoodSearch}>
-          <Plus className="text-gray-700" size={24} />
-        </button>
-        <button onClick={toggleCamera}>
-          <Camera className="text-gray-700" size={24} />
-        </button>
+      <div className="flex justify-around p-4 bg-white">
+        <button onClick={toggleDelerom}><UserPlus size={24} /></button>
+        <button onClick={toggleCamera}><Camera size={24} /></button>
+        <button onClick={toggleFoodSearch}><Plus size={24} /></button>
+        <button onClick={() => {}}><Home size={24} /></button>
       </div>
       {showDelerom && <DeleromScreen />}
       {showCamera && <CameraScreen />}
       {showFoodSearch && <FoodSearchScreen />}
+      {showProfile && <ProfileScreen />}
+      {showConnectedKjoleskaps && <ConnectedKjoleskapsScreen />}
       <Toaster />
     </div>
   )
