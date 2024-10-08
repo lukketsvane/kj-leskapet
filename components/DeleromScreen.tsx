@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { X, Plus } from 'lucide-react'
 
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
