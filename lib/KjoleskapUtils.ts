@@ -1,5 +1,4 @@
-import { supabase } from './supabaseClient'
-import { Kjoleskap, FoodItem } from './types'
+import { supabase } from '../lib/supabase'
 
 export const fetchKjoleskaps = async (userId: string): Promise<Kjoleskap[]> => {
   const { data, error } = await supabase

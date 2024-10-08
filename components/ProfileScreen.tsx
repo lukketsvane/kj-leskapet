@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { X, Share2 } from 'lucide-react'
-import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Checkbox } from "@/components/ui"
-import { supabase } from './supabaseClient'
-import { FoodItem, Kjoleskap } from './types'
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,  } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { supabase } from '../lib/supabase'
+
 import { useToast } from "@/components/ui/use-toast"
 
 interface ProfileScreenProps {
