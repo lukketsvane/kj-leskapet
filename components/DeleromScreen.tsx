@@ -1,41 +1,96 @@
-import React, { useState } from 'react'
-import { X, Plus } from 'lucide-react'
-
-import { useToast } from "@/components/ui/use-toast"
+import React, { useState, useEffect } from 'react'
+import { X, Plus, Search, Trash2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { useToast } from "@/components/ui/use-toast"
 import { supabase } from '../lib/supabase'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,  } from "@/components/ui/dialog"
+
+interface Kjoleskap {
+  id: string;
+  name: string;
+  is_shared: boolean;
+}
 
 interface DeleromScreenProps {
   onClose: () => void;
   onConnect: (kjoleskap: Kjoleskap) => void;
+  onDisconnect: (kjoleskapId: string) => void;
+  userKjoleskaps: Kjoleskap[];
 }
 
-export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect }) => {
-  const [kjøleskapSearchTerm, setKjøleskapSearchTerm] = useState('')
-  const [searchedKjøleskaps, setSearchedKjøleskaps] = useState<Kjoleskap[]>([])
+export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect, onDisconnect, userKjoleskaps = [] }) => {
+  const [allKjoleskaps, setAllKjoleskaps] = useState<Kjoleskap[]>([])
+  const [filteredKjoleskaps, setFilteredKjoleskaps] = useState<Kjoleskap[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [newKjoleskapName, setNewKjoleskapName] = useState('')
+  const [isAddingKjoleskap, setIsAddingKjoleskap] = useState(false)
   const { toast } = useToast()
 
-  const handleSearch = async () => {
+  useEffect(() => {
+    fetchAllKjoleskaps()
+  }, [])
+
+  useEffect(() => {
+    const filtered = allKjoleskaps.filter(kjoleskap => 
+      kjoleskap.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    setFilteredKjoleskaps(filtered)
+  }, [searchTerm, allKjoleskaps])
+
+  const fetchAllKjoleskaps = async () => {
     try {
       const { data, error } = await supabase
         .from('kjoleskaps')
         .select('*')
-        .ilike('name', `%${kjøleskapSearchTerm}%`)
         .eq('is_shared', true)
       
       if (error) throw error
-      setSearchedKjøleskaps(data || [])
+      setAllKjoleskaps(data || [])
     } catch (error) {
-      console.error('Error searching kjøleskaps:', error)
+      console.error('Error fetching kjoleskaps:', error)
       toast({
         title: "Feil",
-        description: "Kunne ikke søke etter kjøleskap. Vennligst prøv igjen.",
+        description: "Kunne ikke hente kjøleskap. Vennligst prøv igjen.",
         variant: "destructive",
       })
     }
+  }
+
+  const handleAddKjoleskap = async () => {
+    if (!newKjoleskapName.trim()) return
+
+    try {
+      const { data, error } = await supabase
+        .from('kjoleskaps')
+        .insert([{ name: newKjoleskapName, is_shared: true }])
+        .select()
+
+      if (error) throw error
+
+      if (data && data[0]) {
+        setAllKjoleskaps(prevKjoleskaps => [...prevKjoleskaps, data[0]])
+        setNewKjoleskapName('')
+        setIsAddingKjoleskap(false)
+        toast({
+          title: "Suksess",
+          description: `${newKjoleskapName} ble lagt til i delerom.`,
+        })
+      }
+    } catch (error) {
+      console.error('Error adding kjoleskap:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til kjøleskapet. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const isConnected = (kjoleskapId: string) => {
+    return userKjoleskaps.some(uk => uk.id === kjoleskapId)
   }
 
   return (
@@ -49,33 +104,63 @@ export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect
         </div>
 
         <div className="mb-4">
-          <Label htmlFor="kjoleskap-search">Søk etter kjøleskap:</Label>
-          <div className="flex space-x-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <Input
-              id="kjoleskap-search"
               type="text"
-              placeholder="Skriv inn kjøleskapnavn..."
-              value={kjøleskapSearchTerm}
-              onChange={(e) => setKjøleskapSearchTerm(e.target.value)}
+              placeholder="Søk etter kjøleskap..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
             />
-            <Button onClick={handleSearch}>Søk</Button>
           </div>
         </div>
 
-        <div className="mb-6 max-h-60 overflow-y-auto">
-          {searchedKjøleskaps.length === 0 ? (
+        <ScrollArea className="h-64 mb-4">
+          {filteredKjoleskaps.length === 0 ? (
             <p className="text-center text-gray-500">Ingen kjøleskap funnet</p>
           ) : (
-            searchedKjøleskaps.map((kjoleskap) => (
+            filteredKjoleskaps.map((kjoleskap) => (
               <div key={kjoleskap.id} className="flex justify-between items-center mb-2 p-2 bg-gray-100 rounded">
                 <p className="font-semibold">{kjoleskap.name}</p>
-                <Button onClick={() => onConnect(kjoleskap)} size="sm">
-                  <Plus size={16} className="mr-1" /> Koble til
-                </Button>
+                {isConnected(kjoleskap.id) ? (
+                  <Button variant="destructive" size="sm" onClick={() => onDisconnect(kjoleskap.id)}>
+                    <Trash2 size={16} className="mr-1" /> Fjern
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => onConnect(kjoleskap)}>
+                    <Plus size={16} className="mr-1" /> Koble til
+                  </Button>
+                )}
               </div>
             ))
           )}
-        </div>
+        </ScrollArea>
+
+        <Dialog open={isAddingKjoleskap} onOpenChange={setIsAddingKjoleskap}>
+          <DialogTrigger asChild>
+            <Button className="w-full">
+              <Plus size={16} className="mr-2" /> Legg til nytt kjøleskap
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Legg til nytt kjøleskap</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="new-kjoleskap-name">Navn på kjøleskap</Label>
+              <Input
+                id="new-kjoleskap-name"
+                value={newKjoleskapName}
+                onChange={(e) => setNewKjoleskapName(e.target.value)}
+                placeholder="Skriv inn navn..."
+              />
+            </div>
+            <DialogFooter>
+              <Button onClick={handleAddKjoleskap}>Legg til</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

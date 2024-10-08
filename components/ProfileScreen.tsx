@@ -1,59 +1,47 @@
 import React, { useState, useEffect } from 'react'
-import { X, Share2 } from 'lucide-react'
+import { X, LogOut, User } from 'lucide-react'
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,  } from "@/components/ui/dialog"
-import { Checkbox } from "@/components/ui/checkbox"
-import { supabase } from '../lib/supabase'
-
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/components/ui/use-toast"
+import { supabase } from '../lib/supabase'
 
 interface ProfileScreenProps {
   onClose: () => void;
   onLogout: () => void;
   userId: string;
-  sharedKjoleskaps: Kjoleskap[];
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onClose, onLogout, userId, sharedKjoleskaps }) => {
-  const [user, setUser] = useState<any>(null)
-  const [personalKjoleskap, setPersonalKjoleskap] = useState<Kjoleskap | null>(null)
-  const [foodItems, setFoodItems] = useState<FoodItem[]>([])
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onClose, onLogout, userId }) => {
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedKjoleskaps, setSelectedKjoleskaps] = useState<string[]>([])
   const { toast } = useToast()
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      setLoading(true)
+    const fetchUserProfile = async () => {
       try {
-        const { data: userData, error: userError } = await supabase.auth.getUser()
-        if (userError) throw userError
-        setUser(userData.user)
-
-        const { data: kjoleskapsData, error: kjoleskapsError } = await supabase
-          .from('kjoleskaps')
+        setLoading(true)
+        const { data: profile, error } = await supabase
+          .from('profiles')
           .select('*')
-          .eq('user_id', userId)
-          .eq('is_default', true)
+          .eq('id', userId)
           .single()
-        if (kjoleskapsError) throw kjoleskapsError
-        setPersonalKjoleskap(kjoleskapsData)
 
-        if (kjoleskapsData) {
-          const { data: foodItemsData, error: foodItemsError } = await supabase
-            .from('food_items')
-            .select('*')
-            .eq('kjoleskap_id', kjoleskapsData.id)
-          if (foodItemsError) throw foodItemsError
-          setFoodItems(foodItemsData || [])
-        }
+        if (error) throw error
+
+        setUserProfile(profile)
       } catch (error) {
-        console.error('Error fetching user data:', error)
+        console.error('Error fetching user profile:', error)
         toast({
           title: "Feil",
-          description: "Kunne ikke hente brukerdata. Vennligst prøv igjen.",
+          description: "Kunne ikke hente brukerprofil. Vennligst prøv igjen.",
           variant: "destructive",
         })
       } finally {
@@ -61,103 +49,53 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onClose, onLogout,
       }
     }
 
-    fetchUserData()
-  }, [userId])
+    fetchUserProfile()
+  }, [userId, toast])
 
-  const handleShare = async (itemId: string) => {
-    if (selectedKjoleskaps.length === 0) return
-
-    try {
-      const sharesToAdd = selectedKjoleskaps.map(kjoleskapId => ({
-        food_item_id: itemId,
-        kjoleskap_id: kjoleskapId
-      }))
-
-      const { error } = await supabase
-        .from('shared_food_items')
-        .insert(sharesToAdd)
-
-      if (error) throw error
-
-      toast({
-        title: "Delt",
-        description: "Matvaren er nå delt med valgte kjøleskap.",
-      })
-    } catch (error) {
-      console.error('Error sharing food item:', error)
-      toast({
-        title: "Feil",
-        description: "Kunne ikke dele matvaren. Vennligst prøv igjen.",
-        variant: "destructive",
-      })
-    } finally {
-      setSelectedKjoleskaps([])
-    }
+  const handleLogout = () => {
+    onLogout()
+    onClose()
   }
 
   return (
-    <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
-      <div className="max-w-md mx-auto p-4">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">Profil</h2>
-          <Button onClick={onClose} variant="ghost">
-            <X size={24} />
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <Card className="w-full max-w-md">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-2xl font-bold">Profil</CardTitle>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
           </Button>
-        </div>
-        
-        {user && (
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold">{user.email}</h1>
-            <p className="text-xl text-gray-500">Personlig kjøleskap: {personalKjoleskap?.name}</p>
-          </div>
-        )}
-
-        <h3 className="text-xl font-semibold mb-4">Dine matvarer</h3>
-        <div className="space-y-4 mb-6">
-          {foodItems.map(item => (
-            <div key={item.id} className="flex justify-between items-center p-2 bg-gray-100 rounded-md">
-              <span>{item.name}</span>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Share2 size={16} className="mr-2" /> Del
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Del {item.name}</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-2">
-                    {sharedKjoleskaps.map(kjoleskap => (
-                      <div key={kjoleskap.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={kjoleskap.id}
-                          checked={selectedKjoleskaps.includes(kjoleskap.id)}
-                          onCheckedChange={(checked) => {
-                            setSelectedKjoleskaps(
-                              checked
-                                ? [...selectedKjoleskaps, kjoleskap.id]
-                                : selectedKjoleskaps.filter(id => id !== kjoleskap.id)
-                            )
-                          }}
-                        />
-                        <label htmlFor={kjoleskap.id}>{kjoleskap.name}</label>
-                      </div>
-                    ))}
-                  </div>
-                  <Button onClick={() => handleShare(item.id)} disabled={selectedKjoleskaps.length === 0}>
-                    Del med valgte kjøleskap
-                  </Button>
-                </DialogContent>
-              </Dialog>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center items-center h-40">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
-          ))}
-        </div>
-
-        <Button onClick={onLogout} variant="destructive" className="w-full">
-          Logg ut
-        </Button>
-      </div>
+          ) : userProfile ? (
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={userProfile.avatar_url || undefined} alt={userProfile.full_name || 'User'} />
+                  <AvatarFallback>
+                    <User className="h-10 w-10" />
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h2 className="text-2xl font-bold">{userProfile.full_name || 'Unnamed User'}</h2>
+                  <p className="text-sm text-gray-500">{userProfile.email}</p>
+                </div>
+              </div>
+              <div className="pt-4">
+                <Button onClick={handleLogout} variant="destructive" className="w-full">
+                  <LogOut className="mr-2 h-4 w-4" /> Logg ut
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-gray-500">Ingen profilinformasjon tilgjengelig</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

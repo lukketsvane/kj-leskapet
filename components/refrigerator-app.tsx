@@ -3,23 +3,18 @@
 import React, { useState, useEffect } from 'react'
 import { useSwipeable } from 'react-swipeable'
 import { UserPlus, Plus, Camera, Grid, List, User, Loader2, ChevronLeft, ChevronRight, Menu } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Auth } from '@supabase/auth-ui-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,  } from "@/components/ui/dialog"
-
 import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { useToast } from "@/components/ui/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { FoodItemComponent } from './FoodItemComponent'
 import { supabase } from '../lib/supabase'
-
 import { fetchKjoleskaps, createDefaultKjoleskap, fetchFoodItems, fetchSharedKjoleskaps, shareFoodItem } from '@/lib/KjoleskapUtils'
 import { ProfileScreen } from './ProfileScreen'
 import { DeleromScreen } from './DeleromScreen'
-import { AddKjoleskapScreen } from './AddKjoleskapScreen'
+import { AddFoodItemScreen } from './AddFoodItemScreen'
+import { Kjoleskap, FoodItem, Session } from '../types'
 
 export default function RefrigeratorApp() {
   const [currentKjoleskaps, setCurrentKjoleskaps] = useState<Kjoleskap[]>([])
@@ -28,11 +23,11 @@ export default function RefrigeratorApp() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sharedKjoleskaps, setSharedKjoleskaps] = useState<Kjoleskap[]>([])
-  const [session, setSession] = useState<any>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [isGridView, setIsGridView] = useState(true)
   const [showProfile, setShowProfile] = useState(false)
   const [showDelerom, setShowDelerom] = useState(false)
-  const [showAddKjoleskap, setShowAddKjoleskap] = useState(false)
+  const [showAddFoodItem, setShowAddFoodItem] = useState(false)
   const { toast } = useToast()
 
   const handlers = useSwipeable({
@@ -108,6 +103,17 @@ export default function RefrigeratorApp() {
     }
   }
 
+  const handleDeleteFoodItem = async (itemId: string) => {
+    try {
+      await supabase.from('food_items').delete().eq('id', itemId)
+      setFoodItems(prevItems => prevItems.filter(item => item.id !== itemId))
+      toast({ title: "Slettet", description: "Matvaren er nå fjernet fra kjøleskapet." })
+    } catch (error) {
+      console.error('Error deleting food item:', error)
+      toast({ title: "Feil", description: "Kunne ikke slette matvaren. Vennligst prøv igjen.", variant: "destructive" })
+    }
+  }
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut()
@@ -133,7 +139,7 @@ export default function RefrigeratorApp() {
       
       if (error) throw error
       
-      setCurrentKjoleskaps([...currentKjoleskaps, kjoleskap])
+      setCurrentKjoleskaps(prev => [...prev, kjoleskap])
       toast({ title: "Suksess", description: `Du er nå koblet til ${kjoleskap.name}.` })
     } catch (error) {
       console.error('Error connecting to kjøleskap:', error)
@@ -141,26 +147,9 @@ export default function RefrigeratorApp() {
     }
   }
 
-  const handleAddKjoleskap = async (name: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('No authenticated user')
-
-      const { data, error } = await supabase
-        .from('kjoleskaps')
-        .insert([{ name, user_id: user.id, is_shared: false, is_default: false }])
-        .select()
-
-      if (error) throw error
-
-      if (data && data[0]) {
-        setCurrentKjoleskaps([...currentKjoleskaps, data[0]])
-        toast({ title: "Suksess", description: `${name} ble lagt til i dine kjøleskap.` })
-      }
-    } catch (error) {
-      console.error('Error adding kjøleskap:', error)
-      toast({ title: "Feil", description: "Kunne ikke legge til kjøleskapet. Vennligst prøv igjen.", variant: "destructive" })
-    }
+  const handleAddFoodItem = (newItem: FoodItem) => {
+    setFoodItems(prev => [...prev, newItem])
+    toast({ title: "Suksess", description: `${newItem.name} ble lagt til i kjøleskapet.` })
   }
 
   if (!session) {
@@ -177,7 +166,25 @@ export default function RefrigeratorApp() {
     <div {...handlers} className="flex flex-col h-screen bg-gray-100">
       <header className="bg-white shadow-sm p-4 flex justify-between items-center">
         <Button variant="ghost" onClick={() => setShowDelerom(true)}><Menu size={24} /></Button>
-        <h1 className="text-xl font-bold">{currentKjoleskaps[selectedKjoleskapIndex]?.name || 'Kjøleskap'}</h1>
+        <div className="flex items-center space-x-2">
+          <Button 
+            variant="ghost" 
+            onClick={() => switchKjoleskap(-1)} 
+            disabled={loading || currentKjoleskaps.length <= 1}
+            className="p-1"
+          >
+            <ChevronLeft size={24} />
+          </Button>
+          <h1 className="text-xl font-bold">{currentKjoleskaps[selectedKjoleskapIndex]?.name || 'Kjøleskap'}</h1>
+          <Button 
+            variant="ghost" 
+            onClick={() => switchKjoleskap(1)} 
+            disabled={loading || currentKjoleskaps.length <= 1}
+            className="p-1"
+          >
+            <ChevronRight size={24} />
+          </Button>
+        </div>
         <Button variant="ghost" onClick={() => setShowProfile(true)}><User size={24} /></Button>
       </header>
 
@@ -191,26 +198,25 @@ export default function RefrigeratorApp() {
         ) : (
           <div className={isGridView ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4" : "space-y-2 p-4"}>
             {foodItems.map((item) => (
-              <FoodItemComponent key={item.id} item={item} onShare={handleShareFoodItem} sharedKjoleskaps={sharedKjoleskaps} />
+              <FoodItemComponent 
+                key={item.id} 
+                item={item} 
+                onShare={handleShareFoodItem} 
+                sharedKjoleskaps={sharedKjoleskaps} 
+                onDelete={handleDeleteFoodItem}
+              />
             ))}
           </div>
         )}
       </main>
 
-      <footer className="bg-white shadow-sm p-4 flex justify-between items-center">
-        <Button variant="ghost" onClick={() => switchKjoleskap(-1)} disabled={loading || currentKjoleskaps.length === 0}>
-          <ChevronLeft size={24} />
-        </Button>
-        <div className="flex space-x-4">
-          <Button variant="ghost" onClick={() => setShowDelerom(true)}><UserPlus size={24} /></Button>
-          <Button variant="ghost" onClick={() => {/* TODO: Implement camera functionality */}}><Camera size={24} /></Button>
-          <Button variant="ghost" onClick={() => setShowAddKjoleskap(true)}><Plus size={24} /></Button>
-          <Button variant="ghost" onClick={() => setIsGridView(!isGridView)}>
-            {isGridView ? <List size={24} /> : <Grid size={24} />}
-          </Button>
-        </div>
-        <Button variant="ghost" onClick={() => switchKjoleskap(1)} disabled={loading || currentKjoleskaps.length === 0}>
-          <ChevronRight size={24} />
+      <footer className="bg-white shadow-sm p-4 flex justify-center items-center space-x-4">
+        <Button variant="ghost" onClick={() => setShowDelerom(true)}><UserPlus size={24} /></Button>
+        <Button variant="ghost" onClick={() => {/* TODO: Implement camera functionality */}}><Camera size={24} 
+ /></Button>
+        <Button variant="ghost" onClick={() => setShowAddFoodItem(true)}><Plus size={24} /></Button>
+        <Button variant="ghost" onClick={() => setIsGridView(!isGridView)}>
+          {isGridView ? <List size={24} /> : <Grid size={24} />}
         </Button>
       </footer>
 
@@ -219,7 +225,6 @@ export default function RefrigeratorApp() {
           onClose={() => setShowProfile(false)}
           onLogout={handleLogout}
           userId={session.user.id}
-          sharedKjoleskaps={sharedKjoleskaps}
         />
       )}
 
@@ -230,10 +235,11 @@ export default function RefrigeratorApp() {
         />
       )}
 
-      {showAddKjoleskap && (
-        <AddKjoleskapScreen
-          onClose={() => setShowAddKjoleskap(false)}
-          onAdd={handleAddKjoleskap}
+      {showAddFoodItem && (
+        <AddFoodItemScreen
+          onClose={() => setShowAddFoodItem(false)}
+          onAddItem={handleAddFoodItem}
+          kjoleskapId={currentKjoleskaps[selectedKjoleskapIndex]?.id}
         />
       )}
 
