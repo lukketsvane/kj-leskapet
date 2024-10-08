@@ -1,3 +1,5 @@
+import { Session as SupabaseSession } from '@supabase/supabase-js'
+
 export interface Kjoleskap {
   id: string;
   name: string;
@@ -21,11 +23,7 @@ export interface UserProfile {
   email: string;
   full_name: string | null;
   avatar_url: string | null;
+  bio: string | null;
 }
 
-export interface Session {
-  user: {
-    id: string;
-    email: string;
-  };
-}
+export type Session = SupabaseSession

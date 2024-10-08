@@ -60,7 +60,7 @@ export default function RefrigeratorApp() {
       setLoading(true)
       let kjoleskaps = await fetchKjoleskaps(userId)
       if (kjoleskaps.length === 0) {
-        const defaultKjoleskap = await createDefaultKjoleskap(userId, session?.user?.email)
+        const defaultKjoleskap = await createDefaultKjoleskap(userId, session?.user?.email ?? '')
         kjoleskaps = [defaultKjoleskap]
       }
       setCurrentKjoleskaps(kjoleskaps)
@@ -139,11 +139,38 @@ export default function RefrigeratorApp() {
       
       if (error) throw error
       
-      setCurrentKjoleskaps(prev => [...prev, kjoleskap])
+      const connectedKjoleskap: Kjoleskap = {
+        ...kjoleskap,
+        user_id: user.id,
+        is_shared: true,
+        is_default: false
+      }
+      
+      setCurrentKjoleskaps(prev => [...prev, connectedKjoleskap])
       toast({ title: "Suksess", description: `Du er nå koblet til ${kjoleskap.name}.` })
     } catch (error) {
       console.error('Error connecting to kjøleskap:', error)
       toast({ title: "Feil", description: "Kunne ikke koble til kjøleskapet. Vennligst prøv igjen.", variant: "destructive" })
+    }
+  }
+
+  const handleDisconnectKjoleskap = async (kjoleskapId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No authenticated user')
+
+      const { error } = await supabase
+        .from('user_kjoleskaps')
+        .delete()
+        .match({ user_id: user.id, kjoleskap_id: kjoleskapId })
+
+      if (error) throw error
+
+      setCurrentKjoleskaps(prev => prev.filter(k => k.id !== kjoleskapId))
+      toast({ title: "Suksess", description: "Du er nå frakoblet kjøleskapet." })
+    } catch (error) {
+      console.error('Error disconnecting from kjøleskap:', error)
+      toast({ title: "Feil", description: "Kunne ikke koble fra kjøleskapet. Vennligst prøv igjen.", variant: "destructive" })
     }
   }
 
@@ -196,7 +223,7 @@ export default function RefrigeratorApp() {
         ) : error ? (
           <div className="p-4 text-red-500">{error}</div>
         ) : (
-          <div className={isGridView ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4" : "space-y-2 p-4"}>
+          <div className={isGridView ? "grid  grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4" : "space-y-2 p-4"}>
             {foodItems.map((item) => (
               <FoodItemComponent 
                 key={item.id} 
@@ -212,8 +239,7 @@ export default function RefrigeratorApp() {
 
       <footer className="bg-white shadow-sm p-4 flex justify-center items-center space-x-4">
         <Button variant="ghost" onClick={() => setShowDelerom(true)}><UserPlus size={24} /></Button>
-        <Button variant="ghost" onClick={() => {/* TODO: Implement camera functionality */}}><Camera size={24} 
- /></Button>
+        <Button variant="ghost" onClick={() => {/* TODO: Implement camera functionality */}}><Camera size={24} /></Button>
         <Button variant="ghost" onClick={() => setShowAddFoodItem(true)}><Plus size={24} /></Button>
         <Button variant="ghost" onClick={() => setIsGridView(!isGridView)}>
           {isGridView ? <List size={24} /> : <Grid size={24} />}
@@ -232,6 +258,8 @@ export default function RefrigeratorApp() {
         <DeleromScreen 
           onClose={() => setShowDelerom(false)}
           onConnect={handleConnectKjoleskap}
+          onDisconnect={handleDisconnectKjoleskap}
+          userKjoleskaps={currentKjoleskaps}
         />
       )}
 
