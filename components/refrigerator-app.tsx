@@ -14,11 +14,178 @@ import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 
-// Supabase client setup
 const supabaseUrl = 'https://tuvjhtfipbcidawhfqvq.supabase.co'
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1dmpodGZpcGJjaWRhd2hmcXZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjgzOTE5OTIsImV4cCI6MjA0Mzk2Nzk5Mn0.75MkqNWYkgWLMB2K5fG345cGnq5Mry7R4oJ432sXhoU'
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+const FoodSearchScreen = ({ onClose, currentKjoleskapId }) => {
+  const [searchTerm, setSearchTerm] = useState('')
+  const [newFoodItem, setNewFoodItem] = useState({ name: '', category: '', calories: 0 })
+  const [foodItems, setFoodItems] = useState([])
+  const [filteredFoodItems, setFilteredFoodItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    fetchFoodItems()
+  }, [])
+
+  useEffect(() => {
+    const filtered = foodItems.filter(item =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    setFilteredFoodItems(filtered)
+  }, [searchTerm, foodItems])
+
+  const fetchFoodItems = async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('food_items')
+        .select('*')
+      
+      if (error) throw error
+      setFoodItems(data || [])
+    } catch (error) {
+      console.error('Error fetching food items:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke hente matvarer. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddExistingFoodItem = async (item) => {
+    try {
+      const { data, error } = await supabase
+        .from('food_items')
+        .insert([{ ...item, kjoleskap_id: currentKjoleskapId }])
+        .select()
+      
+      if (error) throw error
+      
+      toast({
+        title: "Suksess",
+        description: `${item.name} ble lagt til i kjøleskapet.`,
+      })
+    } catch (error) {
+      console.error('Error adding food item:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til matvare. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleAddNewFoodItem = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('food_items')
+        .insert([{ ...newFoodItem, kjoleskap_id: currentKjoleskapId }])
+        .select()
+      
+      if (error) throw error
+      
+      setFoodItems([...foodItems, data[0]])
+      setNewFoodItem({ name: '', category: '', calories: 0 })
+      toast({
+        title: "Suksess",
+        description: `${newFoodItem.name} ble lagt til i kjøleskapet.`,
+      })
+    } catch (error) {
+      console.error('Error adding new food item:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til ny matvare. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg w-96 max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Legg til matvare</h2>
+          <Button variant="ghost" onClick={onClose}>
+            <X size={24} />
+          </Button>
+        </div>
+
+        <div className="mb-4">
+          <Label htmlFor="food-search">Søk etter matvare:</Label>
+          <Input
+            id="food-search"
+            type="text"
+            placeholder="Skriv inn matvare..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center items-center h-32">
+            <Loader2 className="w-8 h-8 animate-spin" />
+          </div>
+        ) : (
+          <div className="mb-6 max-h-60 overflow-y-auto">
+            {filteredFoodItems.length === 0 ? (
+              <p className="text-center text-gray-500">Ingen matvarer funnet</p>
+            ) : (
+              filteredFoodItems.map((item) => (
+                <div key={item.id} className="flex justify-between items-center mb-2 p-2 bg-gray-100 rounded">
+                  <div>
+                    <p className="font-semibold">{item.name}</p>
+                    <p className="text-sm text-gray-600">{item.category} - {item.calories} kalorier</p>
+                  </div>
+                  <Button onClick={() => handleAddExistingFoodItem(item)} size="sm">
+                    <Plus size={16} className="mr-1" /> Legg til
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold mb-2">Legg til ny matvare:</h3>
+          <div className="space-y-2">
+            <Input
+              type="text"
+              placeholder="Navn"
+              value={newFoodItem.name}
+              onChange={(e) => setNewFoodItem({...newFoodItem, name: e.target.value})}
+            />
+            <Input
+              type="text"
+              placeholder="Kategori"
+              value={newFoodItem.category}
+              onChange={(e) => setNewFoodItem({...newFoodItem, category: e.target.value})}
+            />
+            <Input
+              type="number"
+              placeholder="Kalorier"
+              value={newFoodItem.calories}
+              onChange={(e) => setNewFoodItem({...newFoodItem, calories: parseInt(e.target.value) || 0})}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={handleAddNewFoodItem} disabled={!newFoodItem.name}>
+            Legg til ny matvare
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function RefrigeratorApp() {
   const [currentKjoleskaps, setCurrentKjoleskaps] = useState<any[]>([])
@@ -42,6 +209,8 @@ export default function RefrigeratorApp() {
   const [showRemoveKjoleskapConfirmation, setShowRemoveKjoleskapConfirmation] = useState(false)
   const [kjoleskapToRemove, setKjoleskapToRemove] = useState<any>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [kjøleskapSearchTerm, setKjøleskapSearchTerm] = useState('')
+  const [searchedKjøleskaps, setSearchedKjøleskaps] = useState<any[]>([])
   const { toast } = useToast()
 
   const handlers = useSwipeable({
@@ -107,12 +276,12 @@ export default function RefrigeratorApp() {
     }
   }
 
-  async function createDefaultKjoleskap(userId: string, userEmail: string) {
+  async function createDefaultKjoleskap(userId: string, userEmail: string | undefined) {
     try {
-      const kjoleskapName = `${userEmail.split('@')[0]}s kjøleskap`
+      const kjoleskapName = userEmail ? `${userEmail.split('@')[0]}s kjøleskap` : 'Mitt kjøleskap'
       const { data, error } = await supabase
         .from('kjoleskaps')
-        .insert([{ name: kjoleskapName, user_id: userId, is_shared: false }])
+        .insert([{ name: kjoleskapName, user_id: userId, is_shared: false, is_default: true }])
         .select()
       
       if (error) throw error
@@ -126,34 +295,79 @@ export default function RefrigeratorApp() {
   async function fetchFoodItems(kjoleskapId: string) {
     try {
       setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        throw new Error('No authenticated user')
+      }
+
+      // Check if the user has access to this kjoleskap
+      const { data: kjoleskap, error: kjoleskapError } = await supabase
+        .from('kjoleskaps')
+        .select('*')
+        .eq('id', kjoleskapId)
+        .single()
+
+      if (kjoleskapError) throw kjoleskapError
+
+      if (!kjoleskap || (kjoleskap.user_id !== user.id && !kjoleskap.is_shared)) {
+        throw new Error('User does not have access to this kjoleskap')
+      }
+
+      // If the user has access, fetch the food items
       const { data, error } = await supabase
         .from('food_items')
         .select('*')
         .eq('kjoleskap_id', kjoleskapId)
       
-      if (error) {
-        if (error.code === 'PGRST301') {
-          throw new Error('Du har ikke tilgang til å se matvarer i dette kjøleskapet.')
-        }
-        throw error
-      }
+      if (error) throw error
       setFoodItems(data || [])
-    } catch (error) {
-      setError('Feil ved henting av matvarer: ' + (error as Error).message)
-      console.error('Feil ved henting av matvarer:', error)
+    } catch (error: any) {
+      if (error.message === 'User does not have access to this kjoleskap') {
+        setError('Du har ikke tilgang til å se matvarer i dette kjøleskapet.')
+        toast({
+          title: "Feil",
+          description: "Du har ikke tilgang til dette kjøleskapet.",
+          variant: "destructive",
+        })
+      } else {
+        setError('Feil ved henting av matvarer: ' + error.message)
+        console.error('Feil ved henting av matvarer:', error)
+      }
     } finally {
       setLoading(false)
     }
   }
-
   async function fetchAllFoodItems() {
     try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError) throw userError
+  
+      if (!user) {
+        throw new Error('No authenticated user')
+      }
+  
       const { data, error } = await supabase
         .from('food_items')
-        .select('*')
-      
+        .select(`
+          *,
+          kjoleskaps:kjoleskap_id (name)
+        `)
+        .or(`kjoleskaps.user_id.eq.${user.id},kjoleskaps.is_shared.eq.true`)
+  
       if (error) throw error
-      setAllFoodItems(data || [])
+  
+      if (!data) {
+        throw new Error('No data returned from the query')
+      }
+  
+      const formattedData = data.map(item => ({
+        ...item,
+        kjoleskap_name: item.kjoleskaps?.name || 'Unknown'
+      }))
+  
+      setAllFoodItems(formattedData)
     } catch (error) {
       console.error('Feil ved henting av alle matvarer:', error)
       toast({
@@ -161,6 +375,7 @@ export default function RefrigeratorApp() {
         description: "Kunne ikke hente matvarer. Vennligst prøv igjen.",
         variant: "destructive",
       })
+      setAllFoodItems([]) // Set to empty array in case of error
     }
   }
 
@@ -190,7 +405,12 @@ export default function RefrigeratorApp() {
     try {
       const { data, error } = await supabase
         .from('food_items')
-        .insert([{ ...item, kjoleskap_id: currentKjoleskaps[selectedKjoleskapIndex].id }])
+        .insert([{ 
+          name: item.name, 
+          category: item.category, 
+          calories: item.calories, 
+          kjoleskap_id: currentKjoleskaps[selectedKjoleskapIndex].id 
+        }])
         .select()
       
       if (error) throw error
@@ -210,11 +430,11 @@ export default function RefrigeratorApp() {
     }
   }
 
-  const handleAddNewFoodItem = async () => {
+  const handleAddNewFoodItem = async (newItem: typeof newFoodItem) => {
     try {
       const { data, error } = await supabase
         .from('food_items')
-        .insert([{ ...newFoodItem, kjoleskap_id: currentKjoleskaps[selectedKjoleskapIndex].id }])
+        .insert([{ ...newItem, kjoleskap_id: currentKjoleskaps[selectedKjoleskapIndex].id }])
         .select()
       
       if (error) throw error
@@ -224,7 +444,7 @@ export default function RefrigeratorApp() {
       setNewFoodItem({ name: '', category: '', calories: 0 })
       toast({
         title: "Suksess",
-        description: `${newFoodItem.name} ble lagt til i kjøleskapet.`,
+        description: `${newItem.name} ble lagt til i kjøleskapet.`,
       })
     } catch (error) {
       console.error('Feil ved tillegging av ny matvare:', error)
@@ -278,9 +498,6 @@ export default function RefrigeratorApp() {
         title: "Suksess",
         description: `${foodItem.name} ble delt til det valgte kjøleskapet.`,
       })
-
-      // Refetch food items for the current kjøleskap
-      await fetchFoodItems(currentKjoleskaps[selectedKjoleskapIndex].id)
     } catch (error) {
       console.error('Feil ved deling av matvare:', error)
       toast({
@@ -293,6 +510,11 @@ export default function RefrigeratorApp() {
 
   const removeKjoleskap = async (kjoleskapId: string) => {
     try {
+      const kjoleskapToRemove = currentKjoleskaps.find(k => k.id === kjoleskapId)
+      if (kjoleskapToRemove?.is_default) {
+        throw new Error("Du kan ikke slette ditt personlige kjøleskap.")
+      }
+
       const { error } = await supabase
         .from('kjoleskaps')
         .delete()
@@ -314,7 +536,7 @@ export default function RefrigeratorApp() {
       console.error('Feil ved fjerning av kjøleskap:', error)
       toast({
         title: "Feil",
-        description: "Kunne ikke fjerne kjøleskapet. Vennligst prøv igjen.",
+        description: (error as Error).message || "Kunne ikke fjerne kjøleskapet. Vennligst prøv igjen.",
         variant: "destructive",
       })
     } finally {
@@ -325,6 +547,7 @@ export default function RefrigeratorApp() {
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
+    
     if (!file) return
 
     setIsUploading(true)
@@ -339,7 +562,7 @@ export default function RefrigeratorApp() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ image:  base64Image }),
+          body: JSON.stringify({ image: base64Image }),
         })
 
         if (!response.ok) {
@@ -370,6 +593,53 @@ export default function RefrigeratorApp() {
       }
     }
     reader.readAsDataURL(file)
+  }
+
+  const searchKjøleskaps = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('kjoleskaps')
+        .select('*')
+        .ilike('name', `%${kjøleskapSearchTerm}%`)
+        .eq('is_shared', true)
+      
+      if (error) throw error
+      setSearchedKjøleskaps(data || [])
+    } catch (error) {
+      console.error('Feil ved søk etter kjøleskap:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke søke etter kjøleskap. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const addKjøleskap = async (kjøleskapId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No authenticated user')
+
+      const { data, error } = await supabase
+        .from('user_kjoleskaps')
+        .insert([{ user_id: user.id, kjoleskap_id: kjøleskapId }])
+        .select()
+      
+      if (error) throw error
+
+      fetchKjoleskaps()
+      toast({
+        title: "Suksess",
+        description: "Kjøleskapet ble lagt til.",
+      })
+    } catch (error) {
+      console.error('Feil ved tillegging av kjøleskap:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til kjøleskapet. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    }
   }
 
   const GridView = () => (
@@ -458,7 +728,7 @@ export default function RefrigeratorApp() {
       <div className="bg-white p-4 rounded-lg w-80">
         <h2 className="text-lg font-bold mb-4">Del kjøleskap</h2>
         <div className="mb-4">
-          <Label htmlFor="kjoleskap-select">Velg kjøleskap å dele med:</Label>
+          <Label htmlFor="kjoleskap-select">Velg kjøleskap å dele:</Label>
           <select id="kjoleskap-select" className="w-full p-2 border rounded">
             {currentKjoleskaps.map(kjoleskap => (
               <option key={kjoleskap.id} value={kjoleskap.id}>{kjoleskap.name}</option>
@@ -488,63 +758,6 @@ export default function RefrigeratorApp() {
         <div className="flex justify-end">
           <Button onClick={toggleCamera} className="mr-2">Avbryt</Button>
           {isUploading && <Loader2 className="animate-spin" />}
-        </div>
-      </div>
-    </div>
-  )
-
-  const FoodSearchScreen = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-4 rounded-lg w-80">
-        <h2 className="text-lg font-bold mb-4">Legg til matvare</h2>
-        <div className="mb-4">
-          <Label htmlFor="food-search">Søk etter matvare:</Label>
-          <Input
-            id="food-search"
-            type="text"
-            placeholder="Skriv inn matvare..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="mb-4 max-h-60 overflow-y-auto">
-          {allFoodItems
-            .filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
-            .map((item) => (
-              <div key={item.id} className="flex justify-between items-center mb-2">
-                <span>{item.name}</span>
-                <Button onClick={() => handleAddFoodItem(item)}>Legg til</Button>
-              </div>
-            ))
-          }
-        </div>
-        <div className="mb-4">
-          <h3 className="text-md font-semibold mb-2">Legg til ny matvare:</h3>
-          <Input
-            type="text"
-            placeholder="Navn"
-            value={newFoodItem.name}
-            onChange={(e) => setNewFoodItem({...newFoodItem, name: e.target.value})}
-            className="mb-2"
-          />
-          <Input
-            type="text"
-            placeholder="Kategori"
-            value={newFoodItem.category}
-            onChange={(e) => setNewFoodItem({...newFoodItem, category: e.target.value})}
-            className="mb-2"
-          />
-          <Input
-            type="number"
-            placeholder="Kalorier"
-            value={newFoodItem.calories}
-            onChange={(e) => setNewFoodItem({...newFoodItem, calories: parseInt(e.target.value) || 0})}
-            className="mb-2"
-          />
-          <Button onClick={handleAddNewFoodItem} className="w-full">Legg til ny matvare</Button>
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={toggleFoodSearch}>Lukk</Button>
         </div>
       </div>
     </div>
@@ -612,24 +825,36 @@ export default function RefrigeratorApp() {
                 }} className="mr-2">
                   Velg
                 </Button>
-                <Button variant="destructive" onClick={() => {
-                  setKjoleskapToRemove(kjoleskap)
-                  setShowRemoveKjoleskapConfirmation(true)
-                }}>
-                  <Trash2 size={16} />
-                </Button>
+                {!kjoleskap.is_default && (
+                  <Button variant="destructive" onClick={() => {
+                    setKjoleskapToRemove(kjoleskap)
+                    setShowRemoveKjoleskapConfirmation(true)
+                  }}>
+                    <Trash2 size={16} />
+                  </Button>
+                )}
               </div>
             </div>
           ))}
         </div>
         <div className="mb-6">
           <h3 className="text-xl font-semibold mb-2">Søk etter kjøleskap</h3>
-          <Input
-            type="text"
-            placeholder="Søk etter kjøleskap..."
-            className="mb-2"
-          />
-          <Button className="w-full">Søk</Button>
+          <div className="flex mb-2">
+            <Input
+              type="text"
+              placeholder="Søk etter kjøleskap..."
+              value={kjøleskapSearchTerm}
+              onChange={(e) => setKjøleskapSearchTerm(e.target.value)}
+              className="mr-2"
+            />
+            <Button onClick={searchKjøleskaps}>Søk</Button>
+          </div>
+          {searchedKjøleskaps.map((kjoleskap) => (
+            <div key={kjoleskap.id} className="flex justify-between items-center p-2 bg-gray-100 rounded-md mb-2">
+              <span>{kjoleskap.name}</span>
+              <Button onClick={() => addKjøleskap(kjoleskap.id)}>Legg til</Button>
+            </div>
+          ))}
         </div>
       </div>
       <Dialog open={showRemoveKjoleskapConfirmation} onOpenChange={setShowRemoveKjoleskapConfirmation}>
@@ -637,7 +862,7 @@ export default function RefrigeratorApp() {
           <DialogHeader>
             <DialogTitle>Er du sikker på at du vil fjerne dette kjøleskapet?</DialogTitle>
             <DialogDescription>
-              Dette vil permanent fjerne kjøleskapet "{kjoleskapToRemove?.name}" og alle dets innhold.
+              Dette vil fjerne kjøleskapet fra din liste over tilkoblede kjøleskap. Du vil ikke lenger ha tilgang til matvarene i dette kjøleskapet.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-2">
@@ -652,13 +877,11 @@ export default function RefrigeratorApp() {
   if (!session) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="bg-white p-8 rounded-lg shadow-md w-96">
-          <h1 className="text-2xl font-bold mb-6 text-center">Logg inn på KJØLESKAPET</h1>
+        <div className="w-full max-w-md">
           <Auth
             supabaseClient={supabase}
             appearance={{ theme: ThemeSupa }}
-            theme="light"
-            providers={[]}
+            providers={['google']}
           />
         </div>
       </div>
@@ -666,56 +889,62 @@ export default function RefrigeratorApp() {
   }
 
   return (
-    <div
-      className="h-screen w-full bg-cover bg-center flex flex-col"
-      style={{ backgroundImage: 'url(https://i.ibb.co/1Zf3XbJ/image.png)' }}
-    >
-      <div className="flex-1 flex flex-col" {...handlers}>
-        <div className="flex justify-between items-center p-4">
-          <div className="flex items-center">
-            <button onClick={toggleConnectedKjoleskaps} className="mr-2">
-              <Menu size={24} />
-            </button>
-            <button onClick={() => switchKjoleskap(-1)} className="mr-2">
-              <ChevronLeft size={24} />
-            </button>
-            <h1 className="text-3xl font-bold text-black">
-              {currentKjoleskaps[selectedKjoleskapIndex]?.name || 'KJØLESKAPET'}
-            </h1>
-            <button onClick={() => switchKjoleskap(1)} className="ml-2">
-              <ChevronRight size={24} />
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={toggleView}>{isGridView ? <List size={24} /> : <Grid size={24} />}</button>
-            <button onClick={toggleProfile}><User size={24} /></button>
-          </div>
-        </div>
+    <div {...handlers} className="min-h-screen bg-gray-100 flex flex-col">
+      <header className="bg-white shadow-sm p-4 flex justify-between items-center">
+        <Button variant="ghost" onClick={toggleConnectedKjoleskaps}>
+          <Menu size={24} />
+        </Button>
+        <h1 className="text-xl font-bold">{currentKjoleskaps[selectedKjoleskapIndex]?.name || 'Kjøleskap'}</h1>
+        <Button variant="ghost" onClick={toggleProfile}>
+          <User size={24} />
+        </Button>
+      </header>
+
+      <main className="flex-grow overflow-y-auto">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="animate-spin" size={48} />
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-8 h-8 animate-spin" />
           </div>
         ) : error ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-red-500">{error}</p>
-          </div>
-        ) : switchingKjoleskap ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="animate-spin" size={48} />
-          </div>
+          <div className="p-4 text-red-500">{error}</div>
         ) : (
-          isGridView ? <GridView /> : <ListView />
+          <>
+            {isGridView ? <GridView /> : <ListView />}
+          </>
         )}
-      </div>
-      <div className="flex justify-around p-4 bg-white">
-        <button onClick={toggleDelerom}><UserPlus size={24} /></button>
-        <button onClick={toggleCamera}><Camera size={24} /></button>
-        <button onClick={toggleFoodSearch}><Plus size={24} /></button>
-        <button onClick={() => {}}><Home size={24} /></button>
-      </div>
+      </main>
+
+      <footer className="bg-white shadow-sm p-4 flex justify-between items-center">
+        <Button variant="ghost" onClick={() => switchKjoleskap(-1)} disabled={switchingKjoleskap}>
+          <ChevronLeft size={24} />
+        </Button>
+        <div className="flex space-x-4">
+          <Button variant="ghost" onClick={toggleDelerom}>
+            <UserPlus size={24} />
+          </Button>
+          <Button variant="ghost" onClick={toggleCamera}>
+            <Camera size={24} />
+          </Button>
+          <Button variant="ghost" onClick={toggleFoodSearch}>
+            <Plus size={24} />
+          </Button>
+          <Button variant="ghost" onClick={toggleView}>
+            {isGridView ? <List size={24} /> : <Grid size={24} />}
+          </Button>
+        </div>
+        <Button variant="ghost" onClick={() => switchKjoleskap(1)} disabled={switchingKjoleskap}>
+          <ChevronRight size={24} />
+        </Button>
+      </footer>
+
       {showDelerom && <DeleromScreen />}
       {showCamera && <CameraScreen />}
-      {showFoodSearch && <FoodSearchScreen />}
+      {showFoodSearch && (
+        <FoodSearchScreen 
+          onClose={() => setShowFoodSearch(false)} 
+          currentKjoleskapId={currentKjoleskaps[selectedKjoleskapIndex].id} 
+        />
+      )}
       {showProfile && <ProfileScreen />}
       {showConnectedKjoleskaps && <ConnectedKjoleskapsScreen />}
       <Toaster />
