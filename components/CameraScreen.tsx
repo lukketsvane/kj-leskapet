@@ -218,7 +218,7 @@ Example of the expected format:
                       <span>Ingen matvarer oppdaget. Prøv å ta et nytt bilde.</span>
                     </div>
                   ) : (
-                    <ScrollArea className="h-[200px] w-full border rounded-md p-4">
+                    <ScrollArea className="h-[200px] w-full border rounded-mdp-2">
                       {detectedItems.map((item) => (
                         <div key={item.id} className="flex items-center space-x-2 py-2">
                           <Checkbox id={item.id} checked={selectedItems.has(item.id)} onCheckedChange={() => handleItemToggle(item.id)} />

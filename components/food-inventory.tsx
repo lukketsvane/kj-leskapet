@@ -11,13 +11,13 @@ const foodItems = [
 
 export default function FoodInventory() {
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-autop-2">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {foodItems.map((item, index) => (
           <FoodItemCard key={index} {...item} />
         ))}
       </div>
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex justify-around">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-tp-2 flex justify-around">
         <button className="p-2">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />

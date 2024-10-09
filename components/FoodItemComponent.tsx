@@ -1,112 +1,98 @@
-"use client"
-
 import React, { useState } from 'react'
-import { Share2, Trash2, X } from 'lucide-react'
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card, CardContent } from "@/components/ui/card"
-import { FoodItem, Kjoleskap } from '../types'
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Share2, Trash2, X } from 'lucide-react'
+import { FoodItem } from '../types'
 
 interface FoodItemComponentProps {
-  item: FoodItem;
-  onShare: (itemId: string, kjoleskapIds: string[]) => Promise<void>;
-  sharedKjoleskaps: Kjoleskap[];
-  onDelete: (itemId: string) => void;
+  item: FoodItem
+  onShare: (itemId: string, kjoleskapIds: string[]) => void
+  sharedKjoleskaps: any[]
+  onDelete: (itemId: string) => void
+}
+
+const FoodItemPopover: React.FC<{ item: FoodItem; onClose: () => void }> = ({ item, onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+      <div className="min-h-screen px-4 py-4">
+        <div className="flex justify-between items-start mb-4">
+          <h3 className="text-xl font-semibold text-gray-900">{item.name}</h3>
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-gray-400 hover:text-gray-500">
+            <X size={24} />
+          </Button>
+        </div>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600"><strong>Kategori:</strong> {item.category || 'Ukjent kategori'}</p>
+          <p className="text-sm text-gray-600"><strong>Mengde:</strong> {item.quantity} {item.unit}</p>
+          <p className="text-sm text-gray-600"><strong>Utløpsdato:</strong> {item.expirationDate || 'Ikke angitt'}</p>
+          <p className="text-sm text-gray-600"><strong>Plassering:</strong> {item.location || 'Ikke angitt'}</p>
+          <p className="text-sm text-gray-600"><strong>Notater:</strong> {item.notes || 'Ingen notater'}</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export const FoodItemComponent: React.FC<FoodItemComponentProps> = ({ item, onShare, sharedKjoleskaps, onDelete }) => {
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
-  const [selectedKjoleskaps, setSelectedKjoleskaps] = useState<string[]>([])
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
-
-  const handleShare = async () => {
-    await onShare(item.id, selectedKjoleskaps)
-    setIsShareDialogOpen(false)
-    setSelectedKjoleskaps([])
-  }
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
     <>
-      <Card 
-        className="w-full h-48 cursor-pointer transition-all duration-200 hover:shadow-lg"
-        onClick={() => setIsDetailModalOpen(true)}
-      >
-        <CardContent className="p-4 h-full flex flex-col justify-between">
-          <div>
-            {item.image_url ? (
-              <img src={item.image_url} alt={item.name} className="w-full h-24 object-cover mb-2 rounded" />
-            ) : (
-              <div className="w-full h-24 bg-gray-200 mb-2 rounded flex items-center justify-center">
-                <span className="text-gray-400">No image</span>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <Card className={`overflow-hidden cursor-pointer ${isOpen ? 'relative z-50' : ''}`}>
+            <CardContent className="p-2">
+              <div className="aspect-square bg-gray-200 mb-2 flex items-center justify-center text-gray-400 text-xs">
+                No image
               </div>
-            )}
-            <h3 className="font-semibold truncate">{item.name}</h3>
-            <p className="text-sm text-gray-600 truncate">{item.category}</p>
-          </div>
-          <p className="text-sm">{item.quantity} {item.unit}</p>
-        </CardContent>
-      </Card>
-
-      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>{item.name}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {item.image_url && (
-              <img src={item.image_url} alt={item.name} className="w-full h-48  object-cover rounded" />
-            )}
-            <p><strong>Category:</strong> {item.category}</p>
-            <p><strong>Quantity:</strong> {item.quantity} {item.unit}</p>
-          </div>
-          <DialogFooter className="sm:justify-start">
-            <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Share2 size={16} className="mr-2" /> Del
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Del {item.name}</DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="mt-2 max-h-60">
-                  {sharedKjoleskaps.map((kjoleskap) => (
-                    <div key={kjoleskap.id} className="flex items-center space-x-2 py-2">
-                      <Checkbox
-                        id={`share-${item.id}-${kjoleskap.id}`}
-                        checked={selectedKjoleskaps.includes(kjoleskap.id)}
-                        onCheckedChange={(checked) => {
-                          setSelectedKjoleskaps(prev =>
-                            checked
-                              ? [...prev, kjoleskap.id]
-                              : prev.filter(id => id !== kjoleskap.id)
-                          )
-                        }}
-                      />
-                      <Label htmlFor={`share-${item.id}-${kjoleskap.id}`}>{kjoleskap.name}</Label>
-                    </div>
-                  ))}
-                </ScrollArea>
-                <DialogFooter>
-                  <Button onClick={handleShare} disabled={selectedKjoleskaps.length === 0}>
-                    Del med valgte kjøleskap
+              <div className="flex justify-between items-start">
+                <div className="flex-grow">
+                  <h3 className="font-semibold truncate">{item.name}</h3>
+                  <p className="text-xs text-gray-500 truncate">{item.category || 'Ukjent kategori'}</p>
+                  <p className="text-xs">{item.quantity} {item.unit}</p>
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShare(item.id, sharedKjoleskaps.map(k => k.id));
+                    }}
+                  >
+                    <Share2 size={14} />
+                    <span className="sr-only">Del matvare</span>
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            <Button variant="destructive" size="sm" onClick={() => {
-              onDelete(item.id)
-              setIsDetailModalOpen(false)
-            }}>
-              <Trash2 size={16} className="mr-2" /> Slett
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(item.id);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    <span className="sr-only">Slett matvare</span>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </PopoverTrigger>
+        <PopoverContent className="w-screen h-screen p-0">
+          <FoodItemPopover item={item} onClose={() => setIsOpen(false)} />
+        </PopoverContent>
+      </Popover>
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40" 
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
     </>
   )
 }
