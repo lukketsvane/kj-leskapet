@@ -102,7 +102,8 @@ Example of the expected format:
         kjoleskap_id: kjoleskapId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        image_url: ''
+        image_url: '',
+        expirationDate: undefined // Add this line
       }))
       setDetectedItems(items)
       setSelectedItems(new Set(items.map(item => item.id)))

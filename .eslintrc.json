@@ -1,9 +1,7 @@
 {
-  "root": true,
-  "extends": [],
-  "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint"],
-  "rules": {},
-  "ignorePatterns": ["**/*"],
-  "overrides": []
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-img-element": "off"
+  }
 }
