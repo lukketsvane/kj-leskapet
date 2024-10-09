@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useState } from 'react'
 import { Share2, Trash2, X } from 'lucide-react'
 import { Button } from "@/components/ui/button"
@@ -55,7 +57,7 @@ export const FoodItemComponent: React.FC<FoodItemComponentProps> = ({ item, onSh
           </DialogHeader>
           <div className="grid gap-4 py-4">
             {item.image_url && (
-              <img src={item.image_url} alt={item.name} className="w-full h-48 object-cover rounded" />
+              <img src={item.image_url} alt={item.name} className="w-full h-48  object-cover rounded" />
             )}
             <p><strong>Category:</strong> {item.category}</p>
             <p><strong>Quantity:</strong> {item.quantity} {item.unit}</p>

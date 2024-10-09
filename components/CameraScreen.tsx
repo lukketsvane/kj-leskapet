@@ -55,65 +55,50 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
 
 1. Identify each food item.
 2. For each item, provide:
- - name: Common name (Norwegian if possible).
- - quantity: Estimated amount, whole for countable, decimals for measurable.
- - unit: Relevant unit (e.g., stk, grams, liters).
- - category: Food category (Frukt, Grønnsak, Meieriprodukter, etc.).
- - expirationDate: Estimated date in YYYY-MM-DD format.
+- name: Common name (Norwegian if possible).
+- quantity: Estimated amount, whole for countable, decimals for measurable.
+- unit: Relevant unit (e.g., stk, grams, liters).
+- category: Food category (Frukt, Grønnsak, Meieriprodukter, etc.).
 
 If the item is not a food item, use "Ikke-matvare" as the name and "Annet" as the category.
-If unsure about any field, use "unknown" or best guess. Format the response like this:
+If unsure about any field, use "unknown" or best guess.
 
-Example:
+IMPORTANT: Return ONLY the JSON array, without any additional text or formatting. Do not use markdown code blocks. The response should be valid JSON that can be directly parsed.
+
+Example of the expected format:
 [
-{
-  "name": "Eple",
-  "quantity": 3,
-  "unit": "stk",
-  "category": "Frukt",
-  "expirationDate": "2024-10-16"
-},
-{
-  "name": "Ikke-matvare",
-  "quantity": 1,
-  "unit": "stk",
-  "category": "Annet",
-  "expirationDate": "unknown"
-}
+  {
+    "name": "Eple",
+    "quantity": 3,
+    "unit": "stk",
+    "category": "Frukt"
+  },
+  {
+    "name": "Ikke-matvare",
+    "quantity": 1,
+    "unit": "stk",
+    "category": "Annet"
+  }
 ]`
         })
       })
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
       }
       
       const data = await response.json()
       if (data.error) throw new Error(data.error)
 
-      let parsedItems: any[] = []
-      if (Array.isArray(data.items)) {
-        parsedItems = data.items
-      } else if (typeof data.items === 'string') {
-        try {
-          parsedItems = JSON.parse(data.items)
-        } catch (error) {
-          console.error('Error parsing items:', error)
-          parsedItems = []
-        }
-      }
-
-      if (parsedItems.length === 0) {
-        parsedItems = [{ name: 'Ukjent vare', quantity: 1, unit: 'stk', category: 'Ukategorisert', expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] }]
-      }
+      const parsedItems: any[] = Array.isArray(data.items) ? data.items : []
 
       const items: FoodItem[] = parsedItems.map((item: any, index: number) => ({
         id: `temp-${index}`,
-        name: item.name,
+        name: item.name || 'Ukjent vare',
         quantity: parseFloat(item.quantity) || 1,
         unit: item.unit || 'stk',
         category: item.category || 'Ukategorisert',
-        expirationDate: item.expirationDate && item.expirationDate !== 'unknown' ? item.expirationDate : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         kjoleskap_id: kjoleskapId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -125,7 +110,7 @@ Example:
       console.error('Error analyzing image:', error)
       toast({
         title: "Feil",
-        description: "Kunne ikke analysere bildet. Vennligst prøv igjen.",
+        description: error instanceof Error ? error.message : "Kunne ikke analysere bildet. Vennligst prøv igjen.",
         variant: "destructive"
       })
     } finally {
@@ -161,32 +146,34 @@ Example:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: itemsToAdd, kjoleskapId })
       })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
+  
       const result = await response.json()
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}, message: ${JSON.stringify(result)}`)
+      }
+  
       if (result.error) throw new Error(result.error)
-
-      onAddItems(itemsToAdd)
+  
+      onAddItems(result.items)
       toast({
         title: "Suksess",
-        description: `${itemsToAdd.length} matvare(r) lagt til i kjøleskapet.`,
+        description: `${result.items.length} matvare(r) lagt til i kjøleskapet.`,
       })
       onClose()
     } catch (error) {
       console.error('Error adding items:', error)
       toast({
         title: "Feil",
-        description: "Kunne ikke legge til matvarer. Vennligst prøv igjen.",
+        description: error instanceof Error ? error.message : "Kunne ikke legge til matvarer. Vennligst prøv igjen.",
         variant: "destructive"
       })
     } finally {
       setIsAdding(false)
     }
   }
-
+  
+  
   const handleUpdateItem = (itemId: string, field: keyof FoodItem, value: string | number) => {
     setDetectedItems(prev => prev.map(item => item.id === itemId ? { ...item, [field]: value } : item))
   }
@@ -243,14 +230,11 @@ Example:
                                 <Input value={item.unit} onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)} placeholder="Enhet" className="w-1/3" />
                                 <Input value={item.category} onChange={(e) => handleUpdateItem(item.id, 'category', e.target.value)} placeholder="Kategori" className="w-1/3" />
                               </div>
-                              <Input type="date" value={item.expirationDate} onChange={(e) => handleUpdateItem(item.id, 'expirationDate', e.target.value)} />
                               <Button onClick={() => setEditingItem(null)}>Ferdig</Button>
                             </div>
                           ) : (
                             <Label htmlFor={item.id} className="flex-1">
                               {item.name} - {item.quantity} {item.unit} ({item.category})
-                              <br />
-                              <span className="text-sm text-gray-500">Utløper: {item.expirationDate}</span>
                               <Button variant="ghost" size="sm" onClick={() => setEditingItem(item.id)} className="ml-2">
                                 Rediger
                               </Button>
