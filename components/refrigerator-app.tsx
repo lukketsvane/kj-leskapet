@@ -270,26 +270,28 @@ export default function RefrigeratorApp() {
         </div>
 
         <main className="flex-grow overflow-y-auto px-2">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="w-4 h-4 animate-spin" />
-            </div>
-          ) : error ? (
-            <div className="p-1 text-red-500 text-xs">{error}</div>
-          ) : (
-            <div className={`${isGridView ? "grid grid-cols-2 gap-2" : "space-y-2"} pb-16`}>
-              {filteredFoodItems.map((item) => (
-                <FoodItemComponent 
-                  key={item.id} 
-                  item={item} 
-                  onShare={handleShareFoodItem} 
-                  sharedKjoleskaps={sharedKjoleskaps} 
-                  onDelete={handleDeleteFoodItem}
-                />
-              ))}
-            </div>
-          )}
-        </main>
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-4 h-4 animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="p-1 text-red-500 text-xs">{error}</div>
+        ) : (
+          <div className={isGridView ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2" : "space-y-2"}>
+            {filteredFoodItems.map((item) => (
+              <FoodItemComponent 
+                key={item.id} 
+                item={item} 
+                onShare={handleShareFoodItem} 
+                sharedKjoleskaps={sharedKjoleskaps} 
+                onDelete={handleDeleteFoodItem}
+                isGridView={isGridView}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+
       </div>
 
       <footer className="bg-white shadow-sm px-2 py-1 flex justify-between items-center flex-shrink-0">

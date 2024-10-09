@@ -38,64 +38,121 @@ const FoodItemPopover: React.FC<{ item: FoodItem; onClose: () => void }> = ({ it
 export const FoodItemComponent: React.FC<FoodItemComponentProps> = ({ item, onShare, sharedKjoleskaps, onDelete, isGridView }) => {
   const [isOpen, setIsOpen] = useState(false)
 
-  return (
-    <>
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
-        <PopoverTrigger asChild>
-          <Card className={`overflow-hidden cursor-pointer ${isOpen ? 'relative z-50' : ''} ${isGridView ? '' : 'flex items-center'}`}>
-            <CardContent className={`p-2 ${isGridView ? '' : 'flex-grow flex items-center'}`}>
-              {isGridView && (
+  if (isGridView) {
+    return (
+      <>
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+          <PopoverTrigger asChild>
+            <Card className={`overflow-hidden cursor-pointer ${isOpen ? 'relative z-50' : ''}`}>
+              <CardContent className="p-2">
                 <div className="aspect-square bg-gray-200 mb-2 flex items-center justify-center text-gray-400 text-xs">
                   No image
                 </div>
-              )}
-              <div className={`flex justify-between items-start ${isGridView ? '' : 'w-full'}`}>
-                <div className="flex-grow">
-                  <h3 className="font-semibold truncate">{item.name}</h3>
-                  <p className="text-xs text-gray-500 truncate">{item.category || 'Ukjent kategori'}</p>
-                  <p className="text-xs">{item.quantity} {item.unit}</p>
+                <div className="flex justify-between items-start">
+                  <div className="flex-grow">
+                    <h3 className="font-semibold truncate">{item.name}</h3>
+                    <p className="text-xs text-gray-500 truncate">{item.category || 'Ukjent kategori'}</p>
+                    <p className="text-xs">{item.quantity} {item.unit}</p>
+                  </div>
+                  <div className="flex flex-col space-y-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShare(item.id, sharedKjoleskaps.map(k => k.id));
+                      }}
+                    >
+                      <Share2 size={14} />
+                      <span className="sr-only">Del matvare</span>
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(item.id);
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      <span className="sr-only">Slett matvare</span>
+                    </Button>
+                  </div>
                 </div>
-                <div className={`flex ${isGridView ? 'flex-col space-y-1' : 'space-x-1'}`}>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onShare(item.id, sharedKjoleskaps.map(k => k.id));
-                    }}
-                  >
-                    <Share2 size={14} />
-                    <span className="sr-only">Del matvare</span>
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(item.id);
-                    }}
-                  >
-                    <Trash2 size={14} />
-                    <span className="sr-only">Slett matvare</span>
-                  </Button>
+              </CardContent>
+            </Card>
+          </PopoverTrigger>
+          <PopoverContent className="w-screen h-screen p-0">
+            <FoodItemPopover item={item} onClose={() => setIsOpen(false)} />
+          </PopoverContent>
+        </Popover>
+        {isOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40" 
+            onClick={() => setIsOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+      </>
+    )
+  } else {
+    return (
+      <>
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+          <PopoverTrigger asChild>
+            <Card className={`overflow-hidden cursor-pointer ${isOpen ? 'relative z-50' : ''} flex items-center`}>
+              <CardContent className="p-2 flex items-center w-full">
+                <div className="flex justify-between items-center w-full">
+                  <div className="flex-grow">
+                    <h3 className="font-semibold truncate">{item.name}</h3>
+                    <p className="text-xs text-gray-500 truncate">
+                      {item.category || 'Ukjent kategori'} • {item.quantity} {item.unit}
+                    </p>
+                  </div>
+                  <div className="flex space-x-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShare(item.id, sharedKjoleskaps.map(k => k.id));
+                      }}
+                    >
+                      <Share2 size={14} />
+                      <span className="sr-only">Del matvare</span>
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(item.id);
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      <span className="sr-only">Slett matvare</span>
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </PopoverTrigger>
-        <PopoverContent className="w-screen h-screen p-0">
-          <FoodItemPopover item={item} onClose={() => setIsOpen(false)} />
-        </PopoverContent>
-      </Popover>
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40" 
-          onClick={() => setIsOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-    </>
-  )
+              </CardContent>
+            </Card>
+          </PopoverTrigger>
+          <PopoverContent className="w-screen h-screen p-0">
+            <FoodItemPopover item={item} onClose={() => setIsOpen(false)} />
+          </PopoverContent>
+        </Popover>
+        {isOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40" 
+            onClick={() => setIsOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+      </>
+    )
+  }
 }
