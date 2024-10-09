@@ -1,12 +1,14 @@
+'use client';
+
 import React, { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, MessageCircle } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { FoodItem, Kjoleskap } from '../types'
+import { FoodItem, Kjoleskap, User } from '../types'
 import { foodCategoryIcons, FoodCategory, createIconWrapper } from '../lib/foodCategoryIcons'
 import ReactDOMServer from 'react-dom/server'
 
@@ -14,6 +16,8 @@ interface NearbyFoodMapProps {
   onClose: () => void;
   foodItems: FoodItem[];
   currentKjoleskap: Kjoleskap;
+  onRequestPickup: (item: FoodItem) => Promise<boolean>;
+  onOpenChat: (user: User) => void;
 }
 
 // Fix for default marker icon in react-leaflet
@@ -37,13 +41,32 @@ const createIcon = (IconComponent: React.ElementType) => {
   })
 }
 
-export default function NearbyFoodMap({ onClose, foodItems, currentKjoleskap }: NearbyFoodMapProps) {
+export default function NearbyFoodMap({ onClose, foodItems, currentKjoleskap, onRequestPickup, onOpenChat }: NearbyFoodMapProps) {
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedItem, setSelectedItem] = useState<FoodItem | null>(null)
+  const [isRequesting, setIsRequesting] = useState(false)
+  const [requestAccepted, setRequestAccepted] = useState(false)
 
   const filteredFoodItems = foodItems.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.category.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  const handleRequestPickup = async (item: FoodItem) => {
+    setIsRequesting(true)
+    const accepted = await onRequestPickup(item)
+    setIsRequesting(false)
+    setRequestAccepted(accepted)
+    if (accepted) {
+      setSelectedItem(item)
+    }
+  }
+
+  const handleOpenChat = () => {
+    if (selectedItem && selectedItem.owner) {
+      onOpenChat(selectedItem.owner)
+    }
+  }
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -98,6 +121,24 @@ export default function NearbyFoodMap({ onClose, foodItems, currentKjoleskap }: 
                         <p>Kategori: {item.category}</p>
                         <p>Mengde: {item.quantity} {item.unit}</p>
                         <p>Utløpsdato: {new Date(item.expirationDate).toLocaleDateString('no-NO')}</p>
+                        {!requestAccepted && (
+                          <Button
+                            onClick={() => handleRequestPickup(item)}
+                            disabled={isRequesting}
+                            className="mt-2"
+                          >
+                            {isRequesting ? 'Sender forespørsel...' : 'Be om henting'}
+                          </Button>
+                        )}
+                        {requestAccepted && selectedItem?.id === item.id && (
+                          <Button
+                            onClick={handleOpenChat}
+                            className="mt-2"
+                          >
+                            <MessageCircle className="mr-2 h-4 w-4" />
+                            Åpne chat
+                          </Button>
+                        )}
                       </div>
                     </Popup>
                   </Marker>

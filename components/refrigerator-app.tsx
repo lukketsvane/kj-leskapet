@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useSwipeable } from 'react-swipeable'
-import { UserPlus, Plus, Camera, Grid, List, User, Loader2, ChevronLeft, ChevronRight, Menu, Search, Share2, Trash2, X } from 'lucide-react'
+import { UserPlus, Plus, Camera, Grid, List, User, Loader2, ChevronLeft, ChevronRight, Menu, Search, Share2, Trash2, X, MapPin } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Auth } from '@supabase/auth-ui-react'
@@ -16,6 +16,7 @@ import { ProfileScreen } from './ProfileScreen'
 import { DeleromScreen } from './DeleromScreen'
 import { AddFoodItemScreen } from './AddFoodItemScreen'
 import CameraScreen  from './CameraScreen'
+import NearbyFoodMap from './NearbyFoodMap'
 import { Kjoleskap, FoodItem, Session } from '../types'
 
 export default function RefrigeratorApp() {
@@ -32,6 +33,7 @@ export default function RefrigeratorApp() {
   const [showDelerom, setShowDelerom] = useState(false)
   const [showAddFoodItem, setShowAddFoodItem] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+  const [showNearbyMap, setShowNearbyMap] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const { toast } = useToast()
 
@@ -308,7 +310,10 @@ export default function RefrigeratorApp() {
             <Plus size={16} />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsGridView(!isGridView)} aria-label="Endre visning">
-            {isGridView ? <List size={16} /> : <Grid size={16} />}
+            {isGridView ? <List size={16} /> :   <Grid size={16} />}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowNearbyMap(true)} aria-label="Vis kart">
+            <MapPin size={16} />
           </Button>
         </div>
       </footer>
@@ -325,7 +330,6 @@ export default function RefrigeratorApp() {
         <DeleromScreen 
           onClose={() => setShowDelerom(false)}
           onConnect={handleConnectKjoleskap}
-          
           onDisconnect={handleDisconnectKjoleskap}
           userKjoleskaps={currentKjoleskaps}
         />
@@ -344,6 +348,14 @@ export default function RefrigeratorApp() {
           onClose={() => setShowCamera(false)}
           onAddItems={handleAddItemsFromCamera}
           kjoleskapId={currentKjoleskaps[selectedKjoleskapIndex]?.id}
+        />
+      )}
+
+      {showNearbyMap && (
+        <NearbyFoodMap
+          onClose={() => setShowNearbyMap(false)}
+          foodItems={foodItems}
+          currentKjoleskap={currentKjoleskaps[selectedKjoleskapIndex]}
         />
       )}
 
