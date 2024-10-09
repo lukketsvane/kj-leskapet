@@ -79,19 +79,21 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           image: imageDataUrl,
-          prompt: `Analyze the image of food items. Return a JSON array if food items are recognized, following these strict rules:
+          prompt: `Analyze the image of food items. Return a JSON array of identified food items, following these strict rules:
 
-1. Identify each food item.
+1. Identify each distinct food item visible in the image.
 2. For each item, provide:
-   - name: Common name (Norwegian if possible).
-   - quantity: Estimate, whole for countable, decimals for measurable.
-   - unit: Relevant unit (e.g., stk, grams, liters).
-   - category: Food category (Frukt, Grønnsak, etc.).
-   - expirationDate: Estimated in YYYY-MM-DD format.
+   - name: Common name in Norwegian. If unsure of the Norwegian name, use the English name rather than "unknown".
+   - quantity: Estimated amount. Use whole numbers for countable items (e.g., 3 for apples) and decimals for measurable items (e.g., 0.5 for half a loaf of bread).
+   - unit: Relevant unit (e.g., "stk" for pieces, "gram" for weight, "liter" for volume).
+   - category: Food category in Norwegian (e.g., "Frukt", "Grønnsak", "Meieriprodukter", "Kjøtt", "Drikke", "Bakevarer").
+   - expirationDate: Estimated expiration date in YYYY-MM-DD format. If unsure, provide a reasonable estimate based on the type of food.
 
-If no food items are identified, return an empty array. Use "unknown" if unsure.
+3. If you can identify an item but are unsure about some of its properties, provide your best guess rather than using "unknown".
+4. Only use "unknown" as a last resort when you cannot identify the item at all.
+5. If no food items are identified in the image, return an empty array.
 
-Example:
+Example response:
 [
   {
     "name": "Eple",
@@ -99,6 +101,13 @@ Example:
     "unit": "stk",
     "category": "Frukt",
     "expirationDate": "2024-10-16"
+  },
+  {
+    "name": "Melk",
+    "quantity": 1,
+    "unit": "liter",
+    "category": "Meieriprodukter",
+    "expirationDate": "2024-10-10"
   }
 ]`
         })
@@ -125,7 +134,7 @@ Example:
 
       const items: FoodItem[] = parsedItems.map((item: any, index: number) => ({
         id: `temp-${index}`,
-        name: item.name && item.name !== "unknown" ? item.name : 'Ukjent vare',
+        name: item.name || 'Ukjent vare',
         quantity: parseFloat(item.quantity) || 1,
         unit: item.unit || 'stk',
         category: item.category || 'Ukategorisert',
@@ -137,6 +146,9 @@ Example:
       }))
       setDetectedItems(items)
       setSelectedItems(new Set(items.map(item => item.id)))
+
+      // Log the detected items to the console
+      console.log('Detected items:', items)
     } catch (error) {
       console.error('Error analyzing image:', error)
       toast({
@@ -177,11 +189,29 @@ Example:
     ))
   }
 
+  const handleAddNewItem = () => {
+    const newItem: FoodItem = {
+      id: `temp-${detectedItems.length}`,
+      name: '',
+      quantity: 1,
+      unit: 'stk',
+      category: 'Ukategorisert',
+      expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      kjoleskap_id: kjoleskapId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      image_url: ''
+    }
+    setDetectedItems(prev => [...prev, newItem])
+    setSelectedItems(prev => new Set(prev).add(newItem.id))
+    setEditingItem(newItem.id)
+  }
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Legg til matvarer med bilde</DialogTitle>
+          <DialogTitle>Legg til matvarer i kjøleskapet</DialogTitle>
           <DialogDescription>
             Ta et bilde eller last opp et bilde av matvarene du vil legge til i kjøleskapet.
           </DialogDescription>
@@ -219,81 +249,77 @@ Example:
                 </div>
               ) : (
                 <>
-                  {detectedItems.length === 0 ? (
-                    <div className="flex items-center justify-center text-yellow-500">
-                      <AlertTriangle className="mr-2 h-5 w-5" />
-                      <span>Ingen matvarer oppdaget. Prøv å ta et nytt bilde.</span>
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-[200px] w-full border rounded-md p-4">
-                      {detectedItems.map((item) => (
-                        <div key={item.id} className="flex items-center space-x-2 py-2">
-                          <Checkbox
-                            id={item.id}
-                            checked={selectedItems.has(item.id)}
-                            onCheckedChange={() => handleItemToggle(item.id)}
-                          />
-                          {editingItem === item.id ? (
-                            <div className="flex-1 space-y-2">
+                  <ScrollArea className="h-[200px] w-full border rounded-md p-4">
+                    {detectedItems.map((item) => (
+                      <div key={item.id} className="flex items-center space-x-2 py-2">
+                        <Checkbox
+                          id={item.id}
+                          checked={selectedItems.has(item.id)}
+                          onCheckedChange={() => handleItemToggle(item.id)}
+                        />
+                        {editingItem === item.id ? (
+                          <div className="flex-1 space-y-2">
+                            <Input
+                              value={item.name}
+                              onChange={(e) => handleUpdateItem(item.id, 'name', e.target.value)}
+                              placeholder="Navn"
+                            />
+                            <div className="flex space-x-2">
                               <Input
-                                value={item.name}
-                                onChange={(e) => handleUpdateItem(item.id, 'name', e.target.value)}
-                                placeholder="Navn"
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value))}
+                                placeholder="Antall"
+                                className="w-1/3"
                               />
-                              <div className="flex space-x-2">
-                                <Input
-                                  type="number"
-                                  value={item.quantity}
-                                  onChange={(e) => handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value))}
-                                  placeholder="Antall"
-                                  className="w-1/3"
-                                />
-                                <Input
-                                  value={item.unit}
-                                  onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)}
-                                  placeholder="Enhet"
-                                  className="w-1/3"
-                                />
-                                <Input
-                                  value={item.category}
-                                  onChange={(e) => handleUpdateItem(item.id, 'category', e.target.value)}
-                                  placeholder="Kategori"
-                                  className="w-1/3"
-                                />
-                              </div>
                               <Input
-                                type="date"
-                                value={item.expirationDate}
-                                onChange={(e) => handleUpdateItem(item.id, 'expirationDate', e.target.value)}
+                                value={item.unit}
+                                onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)}
+                                placeholder="Enhet"
+                                className="w-1/3"
                               />
-                              <Button onClick={() => setEditingItem(null)}>Ferdig</Button>
+                              <Input
+                                value={item.category}
+                                onChange={(e) => handleUpdateItem(item.id, 'category', e.target.value)}
+                                placeholder="Kategori"
+                                className="w-1/3"
+                              />
                             </div>
-                          ) : (
-                            <Label htmlFor={item.id} className="flex-1">
-                              {item.name} - {item.quantity} {item.unit} ({item.category})
-                              <br />
-                              <span className="text-sm text-gray-500">Utløper: {item.expirationDate}</span>
-                              <Button variant="ghost" size="sm" onClick={() => handleEditItem(item.id)} className="ml-2">
-                                Rediger
-                              </Button>
-                            </Label>
-                          )}
-                        </div>
-                      ))}
-                    </ScrollArea>
-                  )}
+                            <Input
+                              type="date"
+                              value={item.expirationDate}
+                              onChange={(e) => handleUpdateItem(item.id, 'expirationDate', e.target.value)}
+                            />
+                            <Button onClick={() => setEditingItem(null)}>Ferdig</Button>
+                          </div>
+                        ) : (
+                          <Label htmlFor={item.id} className="flex-1">
+                            {item.name} - {item.quantity} {item.unit} ({item.category})
+                            <br />
+                            <span className="text-sm text-gray-500">Utløper: {item.expirationDate}</span>
+                            <Button variant="ghost" size="sm" onClick={() => handleEditItem(item.id)} className="ml-2">
+                              Rediger
+                            </Button>
+                          </Label>
+                        )}
+                      </div>
+                    ))}
+                  </ScrollArea>
                   <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => {
-                      setCapturedImage(null)
-                      setDetectedItems([])
-                      setSelectedItems(new Set())
-                    }}>
-                      <X className="mr-2 h-4 w-4" /> Ta nytt bilde
+                    <Button variant="outline" onClick={handleAddNewItem}>
+                      Legg til ny vare
                     </Button>
                     <Button onClick={handleAddItems} disabled={selectedItems.size === 0}>
-                      <Check className="mr-2 h-4 w-4" /> Legg til valgte ({selectedItems.size})
+                      <Check className="mr-2 h-4 w-4" /> Legg til i kjøleskapet ({selectedItems.size})
                     </Button>
                   </div>
+                  <Button variant="outline" onClick={() => {
+                    setCapturedImage(null)
+                    setDetectedItems([])
+                    setSelectedItems(new Set())
+                  }} className="w-full">
+                    <X className="mr-2 h-4 w-4" /> Ta nytt bilde
+                  </Button>
                 </>
               )}
             </>
