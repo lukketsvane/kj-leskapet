@@ -14,9 +14,8 @@ import { supabase } from '../lib/supabase'
 import { fetchKjoleskaps, createDefaultKjoleskap, fetchFoodItems, fetchSharedKjoleskaps, shareFoodItem } from '@/lib/KjoleskapUtils'
 import { ProfileScreen } from './ProfileScreen'
 import { DeleromScreen } from './DeleromScreen'
-import { AddFoodItemScreen } from './AddFoodItemScreen'
 import { CameraScreen } from './CameraScreen'
-import  NearbyFoodMap from './NearbyFoodMap'
+import NearbyFoodMap from './NearbyFoodMap'
 import { Kjoleskap, FoodItem, Session } from '../types'
 
 export default function RefrigeratorApp() {
