@@ -50,12 +50,16 @@ export interface CreateKjoleskapInput {
   user_id: string;
   is_shared?: boolean;
   is_default?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface UpdateKjoleskapInput {
   name?: string;
   is_shared?: boolean;
   is_default?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface CreateFoodItemInput {
@@ -81,4 +85,16 @@ export interface UpdateUserProfileInput {
   full_name?: string;
   avatar_url?: string;
   bio?: string;
+}
+
+export interface Kjoleskap {
+  id: string;
+  name: string;
+  user_id: string;
+  is_shared: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  latitude: number;
+  longitude: number;
 }

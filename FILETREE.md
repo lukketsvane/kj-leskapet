@@ -3,7 +3,11 @@ c:/Users/Shadow/Documents/GitHub/kj-leskapet/
   ├─].vercel/ (ignored)
   ├─ app/
   │  ├─ api/
-  │  │  └─ analyze-image/
+  │  │  ├─ add-food-items/
+  │  │  │  └─ route.ts
+  │  │  ├─ analyze-image/
+  │  │  │  └─ route.ts
+  │  │  └─ check-envs/
   │  │     └─ route.ts
   │  ├─ fonts/
   │  │  ├─ GeistMonoVF.woff
@@ -14,19 +18,30 @@ c:/Users/Shadow/Documents/GitHub/kj-leskapet/
   │  └─ page.tsx
   ├─ components/
   │  ├─ ui/
+  │  │  ├─ avatar.tsx
   │  │  ├─ button.tsx
+  │  │  ├─ card.tsx
   │  │  ├─ checkbox.tsx
+  │  │  ├─ command.tsx
   │  │  ├─ dialog.tsx
   │  │  ├─ input.tsx
   │  │  ├─ label.tsx
   │  │  ├─ popover.tsx
+  │  │  ├─ scroll-area.tsx
   │  │  ├─ select.tsx
+  │  │  ├─ tabs.tsx
+  │  │  ├─ textarea.tsx
   │  │  ├─ toast.tsx
   │  │  ├─ toaster.tsx
   │  │  └─ use-toast.ts
+  │  ├─ AddFoodItemScreen.tsx
   │  ├─ AddKjoleskapScreen.tsx
+  │  ├─ CameraScreen.tsx
   │  ├─ DeleromScreen.tsx
+  │  ├─ food-inventory.tsx
+  │  ├─ food-item-card.tsx
   │  ├─ FoodItemComponent.tsx
+  │  ├─ FoodItemList.tsx
   │  ├─ ProfileScreen.tsx
   │  └─ refrigerator-app.tsx
   ├─ hooks/
@@ -36,12 +51,14 @@ c:/Users/Shadow/Documents/GitHub/kj-leskapet/
   │  ├─ supabase.ts
   │  └─ utils.ts
   ├─]node_modules/ (ignored)
+  ├─ types/
+  │  ├─ index.ts
+  │  └─ supabase.ts
   ├─].env.local (ignored)
   ├─ .eslintrc.json
   ├─ .gitignore
   ├─ components.json
-  ├─ FoodItemComponent.tsx
-  ├─ KjoleskapUtils.ts
+  ├─ FILETREE.md
   ├─]next-env.d.ts (ignored)
   ├─ next.config.js
   ├─ package-lock.json
