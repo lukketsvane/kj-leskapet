@@ -6,24 +6,28 @@ export interface Kjoleskap {
   user_id: string;
   is_shared: boolean;
   is_default: boolean;
-}
-
-export interface FoodItem {
+  created_at: string;
+  updated_at: string;
+}export interface FoodItem {
   id: string;
   name: string;
-  category: string;
   quantity: number;
   unit: string;
+  category: string;
+  expirationDate: string;
   kjoleskap_id: string;
-  image_url?: string;
+  created_at: string;
+  updated_at: string;
+  image_url: string;
 }
-
 export interface UserProfile {
   id: string;
   email: string;
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type Session = SupabaseSession

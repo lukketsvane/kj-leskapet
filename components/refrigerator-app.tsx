@@ -14,7 +14,7 @@ import { fetchKjoleskaps, createDefaultKjoleskap, fetchFoodItems, fetchSharedKjo
 import { ProfileScreen } from './ProfileScreen'
 import { DeleromScreen } from './DeleromScreen'
 import { AddFoodItemScreen } from './AddFoodItemScreen'
-import { CameraScreen } from './CameraScreen'
+import CameraScreen from './CameraScreen'
 import { Kjoleskap, FoodItem, Session } from '../types'
 
 export default function RefrigeratorApp() {
