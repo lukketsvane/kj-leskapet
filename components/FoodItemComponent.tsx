@@ -10,6 +10,7 @@ interface FoodItemComponentProps {
   onShare: (itemId: string, kjoleskapIds: string[]) => void
   sharedKjoleskaps: any[]
   onDelete: (itemId: string) => void
+  isGridView: boolean
 }
 
 const FoodItemPopover: React.FC<{ item: FoodItem; onClose: () => void }> = ({ item, onClose }) => {
@@ -34,25 +35,27 @@ const FoodItemPopover: React.FC<{ item: FoodItem; onClose: () => void }> = ({ it
   )
 }
 
-export const FoodItemComponent: React.FC<FoodItemComponentProps> = ({ item, onShare, sharedKjoleskaps, onDelete }) => {
+export const FoodItemComponent: React.FC<FoodItemComponentProps> = ({ item, onShare, sharedKjoleskaps, onDelete, isGridView }) => {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
     <>
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
-          <Card className={`overflow-hidden cursor-pointer ${isOpen ? 'relative z-50' : ''}`}>
-            <CardContent className="p-2">
-              <div className="aspect-square bg-gray-200 mb-2 flex items-center justify-center text-gray-400 text-xs">
-                No image
-              </div>
-              <div className="flex justify-between items-start">
+          <Card className={`overflow-hidden cursor-pointer ${isOpen ? 'relative z-50' : ''} ${isGridView ? '' : 'flex items-center'}`}>
+            <CardContent className={`p-2 ${isGridView ? '' : 'flex-grow flex items-center'}`}>
+              {isGridView && (
+                <div className="aspect-square bg-gray-200 mb-2 flex items-center justify-center text-gray-400 text-xs">
+                  No image
+                </div>
+              )}
+              <div className={`flex justify-between items-start ${isGridView ? '' : 'w-full'}`}>
                 <div className="flex-grow">
                   <h3 className="font-semibold truncate">{item.name}</h3>
                   <p className="text-xs text-gray-500 truncate">{item.category || 'Ukjent kategori'}</p>
                   <p className="text-xs">{item.quantity} {item.unit}</p>
                 </div>
-                <div className="flex flex-col space-y-1">
+                <div className={`flex ${isGridView ? 'flex-col space-y-1' : 'space-x-1'}`}>
                   <Button 
                     variant="ghost" 
                     size="icon" 
