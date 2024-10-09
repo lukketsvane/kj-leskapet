@@ -309,8 +309,8 @@ export default function RefrigeratorApp() {
           <Button variant="ghost" size="sm" onClick={() => setShowAddFoodItem(true)} aria-label="Legg til matvare">
             <Plus size={16} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setIsGridView(!isGridView)} aria-label="Endre visning">
-            {isGridView ? <List size={16} /> :   <Grid size={16} />}
+          <Button variant="ghost" size="sm" onClick={() => setIsGridView(!isGridView)}   aria-label="Endre visning">
+            {isGridView ? <List size={16} /> : <Grid size={16} />}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowNearbyMap(true)} aria-label="Vis kart">
             <MapPin size={16} />

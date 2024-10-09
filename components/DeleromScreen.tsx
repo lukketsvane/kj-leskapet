@@ -92,7 +92,7 @@ export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Delerom</DialogTitle>
+          <DialogTitle>Kjøleskap</DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="connect">
           <TabsList className="grid w-full grid-cols-2">
