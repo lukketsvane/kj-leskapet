@@ -228,7 +228,7 @@ export default function RefrigeratorApp() {
   }
 
   return (
-    <div {...handlers} className="flex flex-col h-screen bg-gray-100">
+    <div {...handlers} className="flex flex-col h-screen bg-gray-100 overflow-hidden">
       <header className="bg-white shadow-sm p-4 flex justify-between items-center">
         <Button variant="ghost" onClick={() => setShowDelerom(true)}><Menu size={24} /></Button>
         <div className="flex items-center space-x-2">
@@ -253,7 +253,7 @@ export default function RefrigeratorApp() {
         <Button variant="ghost" onClick={() => setShowProfile(true)}><User size={24} /></Button>
       </header>
 
-      <div className="p-4">
+      <div className="p-4 flex-shrink-0">
         <div className="relative">
           <Input
             type="text"
@@ -288,7 +288,7 @@ export default function RefrigeratorApp() {
         )}
       </main>
 
-      <footer className="bg-white shadow-sm p-4 flex justify-between items-center">
+      <footer className="bg-white shadow-sm p-4 flex justify-between items-center flex-shrink-0">
         <div className="flex space-x-4">
           <Button variant="ghost" onClick={() => setShowDelerom(true)} aria-label="Delerom">
             <UserPlus size={24} />
@@ -317,12 +317,12 @@ export default function RefrigeratorApp() {
 
       {showDelerom && (
         <DeleromScreen 
-          onClose={() => 
-          setShowDelerom(false)}
+          onClose={() => setShowDelerom(false)}
           onConnect={handleConnectKjoleskap}
           onDisconnect={handleDisconnectKjoleskap}
           userKjoleskaps={currentKjoleskaps}
         />
+      
       )}
 
       {showAddFoodItem && (
