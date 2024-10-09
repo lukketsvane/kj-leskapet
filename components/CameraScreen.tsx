@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, ChangeEvent } from 'react'
 import { Camera, X, Check, Loader2, Upload, AlertTriangle } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -11,15 +11,37 @@ import { useToast } from "@/components/ui/use-toast"
 import { Input } from "@/components/ui/input"
 import { FoodItem } from '../types'
 
-export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: { onClose: () => void; onAddItems: (items: FoodItem[]) => void; kjoleskapId: string }) {
+interface CameraScreenProps {
+  onClose: () => void;
+  onAddItems: (items: FoodItem[]) => void;
+  kjoleskapId: string;
+}
+
+export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: CameraScreenProps) {
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [detectedItems, setDetectedItems] = useState<FoodItem[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [editingItem, setEditingItem] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+
+  const captureImage = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext('2d')
+      if (context) {
+        canvasRef.current.width = videoRef.current.videoWidth
+        canvasRef.current.height = videoRef.current.videoHeight
+        context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height)
+        const imageDataUrl = canvasRef.current.toDataURL('image/jpeg')
+        setCapturedImage(imageDataUrl)
+        analyzeImage(imageDataUrl)
+      }
+    }
+  }
+
   const analyzeImage = async (imageDataUrl: string) => {
     setIsAnalyzing(true)
     try {
@@ -28,13 +50,46 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: { onC
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           image: imageDataUrl,
-          prompt: 'Analyze the food image and return a JSON array with each item. For each item, provide: name (Norwegian if possible), quantity, unit, category, and expirationDate (YYYY-MM-DD format).'
+          prompt: `Analyze the food image and return a JSON array with each item. Follow these rules strictly:
+
+1. Identify each food item.
+2. For each item, provide:
+ - name: Common name (Norwegian if possible).
+ - quantity: Estimated amount, whole for countable, decimals for measurable.
+ - unit: Relevant unit (e.g., stk, grams, liters).
+ - category: Food category (Frukt, Grønnsak, Meieriprodukter, etc.).
+ - expirationDate: Estimated date in YYYY-MM-DD format.
+
+If the item is not a food item, use "Ikke-matvare" as the name and "Annet" as the category.
+If unsure about any field, use "unknown" or best guess. Format the response like this:
+
+Example:
+[
+{
+  "name": "Eple",
+  "quantity": 3,
+  "unit": "stk",
+  "category": "Frukt",
+  "expirationDate": "2024-10-16"
+},
+{
+  "name": "Ikke-matvare",
+  "quantity": 1,
+  "unit": "stk",
+  "category": "Annet",
+  "expirationDate": "unknown"
+}
+]`
         })
       })
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
       const data = await response.json()
       if (data.error) throw new Error(data.error)
-  
+
       let parsedItems: any[] = []
       if (Array.isArray(data.items)) {
         parsedItems = data.items
@@ -46,14 +101,18 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: { onC
           parsedItems = []
         }
       }
-  
+
+      if (parsedItems.length === 0) {
+        parsedItems = [{ name: 'Ukjent vare', quantity: 1, unit: 'stk', category: 'Ukategorisert', expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] }]
+      }
+
       const items: FoodItem[] = parsedItems.map((item: any, index: number) => ({
         id: `temp-${index}`,
-        name: item.name || 'Ukjent vare',
+        name: item.name,
         quantity: parseFloat(item.quantity) || 1,
         unit: item.unit || 'stk',
         category: item.category || 'Ukategorisert',
-        expirationDate: item.expirationDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        expirationDate: item.expirationDate && item.expirationDate !== 'unknown' ? item.expirationDate : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         kjoleskap_id: kjoleskapId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -72,19 +131,8 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: { onC
       setIsAnalyzing(false)
     }
   }
-  const handleCapture = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas')
-      canvas.width = videoRef.current.videoWidth
-      canvas.height = videoRef.current.videoHeight
-      canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
-      const imageDataUrl = canvas.toDataURL('image/jpeg')
-      setCapturedImage(imageDataUrl)
-      analyzeImage(imageDataUrl)
-    }
-  }
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
       const reader = new FileReader()
@@ -102,6 +150,11 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: { onC
     newSet.has(itemId) ? newSet.delete(itemId) : newSet.add(itemId)
     return newSet
   })
+
+  const handleAddItems = () => {
+    onAddItems(detectedItems.filter(item => selectedItems.has(item.id)))
+    onClose()
+  }
 
   const handleUpdateItem = (itemId: string, field: keyof FoodItem, value: string | number) => {
     setDetectedItems(prev => prev.map(item => item.id === itemId ? { ...item, [field]: value } : item))
@@ -127,7 +180,7 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: { onC
                 </Button>
               </div>
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
-              <Button onClick={handleCapture} className="w-full">
+              <Button onClick={captureImage} className="w-full">
                 <Camera className="mr-2 h-4 w-4" /> Ta bilde
               </Button>
             </>
@@ -141,39 +194,46 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: { onC
                 </div>
               ) : (
                 <>
-                  <ScrollArea className="h-[200px] w-full border rounded-md p-4">
-                    {detectedItems.map((item) => (
-                      <div key={item.id} className="flex items-center space-x-2 py-2">
-                        <Checkbox id={item.id} checked={selectedItems.has(item.id)} onCheckedChange={() => handleItemToggle(item.id)} />
-                        {editingItem === item.id ? (
-                          <div className="flex-1 space-y-2">
-                            <Input value={item.name} onChange={(e) => handleUpdateItem(item.id, 'name', e.target.value)} placeholder="Navn" />
-                            <div className="flex space-x-2">
-                              <Input type="number" value={item.quantity} onChange={(e) => handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value))} placeholder="Antall" className="w-1/3" />
-                              <Input value={item.unit} onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)} placeholder="Enhet" className="w-1/3" />
-                              <Input value={item.category} onChange={(e) => handleUpdateItem(item.id, 'category', e.target.value)} placeholder="Kategori" className="w-1/3" />
+                  {detectedItems.length === 0 ? (
+                    <div className="flex items-center justify-center text-yellow-500">
+                      <AlertTriangle className="mr-2 h-5 w-5" />
+                      <span>Ingen matvarer oppdaget. Prøv å ta et nytt bilde.</span>
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[200px] w-full border rounded-md p-4">
+                      {detectedItems.map((item) => (
+                        <div key={item.id} className="flex items-center space-x-2 py-2">
+                          <Checkbox id={item.id} checked={selectedItems.has(item.id)} onCheckedChange={() => handleItemToggle(item.id)} />
+                          {editingItem === item.id ? (
+                            <div className="flex-1 space-y-2">
+                              <Input value={item.name} onChange={(e) => handleUpdateItem(item.id, 'name', e.target.value)} placeholder="Navn" />
+                              <div className="flex space-x-2">
+                                <Input type="number" value={item.quantity} onChange={(e) => handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value))} placeholder="Antall" className="w-1/3" />
+                                <Input value={item.unit} onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)} placeholder="Enhet" className="w-1/3" />
+                                <Input value={item.category} onChange={(e) => handleUpdateItem(item.id, 'category', e.target.value)} placeholder="Kategori" className="w-1/3" />
+                              </div>
+                              <Input type="date" value={item.expirationDate} onChange={(e) => handleUpdateItem(item.id, 'expirationDate', e.target.value)} />
+                              <Button onClick={() => setEditingItem(null)}>Ferdig</Button>
                             </div>
-                            <Input type="date" value={item.expirationDate} onChange={(e) => handleUpdateItem(item.id, 'expirationDate', e.target.value)} />
-                            <Button onClick={() => setEditingItem(null)}>Ferdig</Button>
-                          </div>
-                        ) : (
-                          <Label htmlFor={item.id} className="flex-1">
-                            {item.name} - {item.quantity} {item.unit} ({item.category})
-                            <br />
-                            <span className="text-sm text-gray-500">Utløper: {item.expirationDate}</span>
-                            <Button variant="ghost" size="sm" onClick={() => setEditingItem(item.id)} className="ml-2">
-                              Rediger
-                            </Button>
-                          </Label>
-                        )}
-                      </div>
-                    ))}
-                  </ScrollArea>
+                          ) : (
+                            <Label htmlFor={item.id} className="flex-1">
+                              {item.name} - {item.quantity} {item.unit} ({item.category})
+                              <br />
+                              <span className="text-sm text-gray-500">Utløper: {item.expirationDate}</span>
+                              <Button variant="ghost" size="sm" onClick={() => setEditingItem(item.id)} className="ml-2">
+                                Rediger
+                              </Button>
+                            </Label>
+                          )}
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  )}
                   <div className="flex justify-between">
                     <Button variant="outline" onClick={() => { setCapturedImage(null); setDetectedItems([]); setSelectedItems(new Set()) }}>
                       <X className="mr-2 h-4 w-4" /> Ta nytt bilde
                     </Button>
-                    <Button onClick={() => { onAddItems(detectedItems.filter(item => selectedItems.has(item.id))); onClose(); }} disabled={selectedItems.size === 0}>
+                    <Button onClick={handleAddItems} disabled={selectedItems.size === 0}>
                       <Check className="mr-2 h-4 w-4" /> Legg til valgte ({selectedItems.size})
                     </Button>
                   </div>
@@ -183,6 +243,7 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: { onC
           )}
         </div>
       </DialogContent>
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
     </Dialog>
   )
 }
