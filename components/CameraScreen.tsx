@@ -21,6 +21,7 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [detectedItems, setDetectedItems] = useState<FoodItem[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isAdding, setIsAdding] = useState(false)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [editingItem, setEditingItem] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -151,9 +152,39 @@ Example:
     return newSet
   })
 
-  const handleAddItems = () => {
-    onAddItems(detectedItems.filter(item => selectedItems.has(item.id)))
-    onClose()
+  const handleAddItems = async () => {
+    setIsAdding(true)
+    try {
+      const itemsToAdd = detectedItems.filter(item => selectedItems.has(item.id))
+      const response = await fetch('/api/add-food-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToAdd, kjoleskapId })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (result.error) throw new Error(result.error)
+
+      onAddItems(itemsToAdd)
+      toast({
+        title: "Suksess",
+        description: `${itemsToAdd.length} matvare(r) lagt til i kjøleskapet.`,
+      })
+      onClose()
+    } catch (error) {
+      console.error('Error adding items:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til matvarer. Vennligst prøv igjen.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsAdding(false)
+    }
   }
 
   const handleUpdateItem = (itemId: string, field: keyof FoodItem, value: string | number) => {
@@ -233,8 +264,17 @@ Example:
                     <Button variant="outline" onClick={() => { setCapturedImage(null); setDetectedItems([]); setSelectedItems(new Set()) }}>
                       <X className="mr-2 h-4 w-4" /> Ta nytt bilde
                     </Button>
-                    <Button onClick={handleAddItems} disabled={selectedItems.size === 0}>
-                      <Check className="mr-2 h-4 w-4" /> Legg til valgte ({selectedItems.size})
+                    <Button onClick={handleAddItems} disabled={selectedItems.size === 0 || isAdding}>
+                      {isAdding ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Legger til...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="mr-2 h-4 w-4" /> Legg til valgte ({selectedItems.size})
+                        </>
+                      )}
                     </Button>
                   </div>
                 </>
