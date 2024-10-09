@@ -16,12 +16,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is not set')
-    }
-
     const response = await openai.chat.completions.create({
-      model: 'gpt-4-turbo',
+      model: 'gpt-4-vision-preview',
       messages: [
         {
           role: 'user',
@@ -43,13 +39,19 @@ export async function POST(req: NextRequest) {
       throw new Error('No content in OpenAI response')
     }
 
-    const items = content.split('\n').filter(line => line.trim() !== '')
+    let items
+    try {
+      items = JSON.parse(content)
+    } catch (error) {
+      console.error('Error parsing OpenAI response:', error)
+      items = []
+    }
 
     return NextResponse.json({ items })
   } catch (error) {
     console.error('Error analyzing image:', error)
     return NextResponse.json(
-      { error: 'Error analyzing image: ' + (error instanceof Error ? error.message : String(error)) },
+      { error: 'Error analyzing image' },
       { status: 500 }
     )
   }
