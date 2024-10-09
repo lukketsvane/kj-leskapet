@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react'
 import { useSwipeable } from 'react-swipeable'
-import { UserPlus, Plus, Camera, Grid, List, User, Loader2, ChevronLeft, ChevronRight, Menu } from 'lucide-react'
+import { UserPlus, Plus, Camera, Grid, List, User, Loader2, ChevronLeft, ChevronRight, Menu, Search } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { useToast } from "@/components/ui/use-toast"
@@ -21,6 +22,7 @@ export default function RefrigeratorApp() {
   const [currentKjoleskaps, setCurrentKjoleskaps] = useState<Kjoleskap[]>([])
   const [selectedKjoleskapIndex, setSelectedKjoleskapIndex] = useState(0)
   const [foodItems, setFoodItems] = useState<FoodItem[]>([])
+  const [filteredFoodItems, setFilteredFoodItems] = useState<FoodItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sharedKjoleskaps, setSharedKjoleskaps] = useState<Kjoleskap[]>([])
@@ -30,6 +32,7 @@ export default function RefrigeratorApp() {
   const [showDelerom, setShowDelerom] = useState(false)
   const [showAddFoodItem, setShowAddFoodItem] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const { toast } = useToast()
 
   const handlers = useSwipeable({
@@ -57,6 +60,14 @@ export default function RefrigeratorApp() {
     return () => subscription.unsubscribe()
   }, [])
 
+  useEffect(() => {
+    const filtered = foodItems.filter(item =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    setFilteredFoodItems(filtered)
+  }, [searchTerm, foodItems])
+
   const fetchAllData = async (userId: string) => {
     try {
       setLoading(true)
@@ -81,6 +92,7 @@ export default function RefrigeratorApp() {
     try {
       const items = await fetchFoodItems(kjoleskapId)
       setFoodItems(items)
+      setFilteredFoodItems(items)
     } catch (error: any) {
       setError('Feil ved henting av matvarer: ' + error.message)
     }
@@ -241,6 +253,19 @@ export default function RefrigeratorApp() {
         <Button variant="ghost" onClick={() => setShowProfile(true)}><User size={24} /></Button>
       </header>
 
+      <div className="p-4">
+        <div className="relative">
+          <Input
+            type="text"
+            placeholder="Søk etter matvarer..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 pr-4 py-2 w-full"
+          />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+        </div>
+      </div>
+
       <main className="flex-grow overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-full">
@@ -250,7 +275,7 @@ export default function RefrigeratorApp() {
           <div className="p-4 text-red-500">{error}</div>
         ) : (
           <div className={isGridView ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4" : "space-y-2 p-4"}>
-            {foodItems.map((item) => (
+            {filteredFoodItems.map((item) => (
               <FoodItemComponent 
                 key={item.id} 
                 item={item} 
@@ -263,13 +288,23 @@ export default function RefrigeratorApp() {
         )}
       </main>
 
-      <footer className="bg-white shadow-sm p-4 flex justify-center items-center space-x-4">
-        <Button variant="ghost" onClick={() => setShowDelerom(true)}><UserPlus size={24} /></Button>
-        <Button variant="ghost" onClick={() => setShowCamera(true)}><Camera size={24} /></Button>
-        <Button variant="ghost" onClick={() => setShowAddFoodItem(true)}><Plus size={24} /></Button>
-        <Button variant="ghost" onClick={() => setIsGridView(!isGridView)}>
-          {isGridView ? <List size={24} /> : <Grid size={24} />}
-        </Button>
+      <footer className="bg-white shadow-sm p-4 flex justify-between items-center">
+        <div className="flex space-x-4">
+          <Button variant="ghost" onClick={() => setShowDelerom(true)} aria-label="Delerom">
+            <UserPlus size={24} />
+          </Button>
+          <Button variant="ghost" onClick={() => setShowCamera(true)} aria-label="Kamera">
+            <Camera size={24} />
+          </Button>
+        </div>
+        <div className="flex space-x-4">
+          <Button variant="ghost" onClick={() => setShowAddFoodItem(true)} aria-label="Legg til matvare">
+            <Plus size={24} />
+          </Button>
+          <Button variant="ghost" onClick={() => setIsGridView(!isGridView)} aria-label="Endre visning">
+            {isGridView ? <List size={24} /> : <Grid size={24} />}
+          </Button>
+        </div>
       </footer>
 
       {showProfile && (
@@ -282,7 +317,8 @@ export default function RefrigeratorApp() {
 
       {showDelerom && (
         <DeleromScreen 
-          onClose={() => setShowDelerom(false)}
+          onClose={() => 
+          setShowDelerom(false)}
           onConnect={handleConnectKjoleskap}
           onDisconnect={handleDisconnectKjoleskap}
           userKjoleskaps={currentKjoleskaps}
