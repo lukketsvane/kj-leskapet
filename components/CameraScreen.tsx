@@ -9,12 +9,29 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { Input } from "@/components/ui/input"
-import { FoodItem } from '../types'
+
+interface FoodItem {
+  id: string;
+  name: string;
+  category: string;
+  calories: number | null;
+  quantity: number;
+  unit: string;
+  kjoleskap_id: string;
+  created_at: string;
+  updated_at: string;
+  expiration_date: string | null;
+}
 
 interface CameraScreenProps {
   onClose: () => void;
   onAddItems: (items: FoodItem[]) => void;
   kjoleskapId: string;
+}
+
+// Simple function to generate a unique ID
+const generateId = () => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
 export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: CameraScreenProps) {
@@ -86,8 +103,9 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
    - name: Common name in Norwegian. If unsure of the Norwegian name, use the English name rather than "unknown".
    - quantity: Estimated amount. Use whole numbers for countable items (e.g., 3 for apples) and decimals for measurable items (e.g., 0.5 for half a loaf of bread).
    - unit: Relevant unit (e.g., "stk" for pieces, "gram" for weight, "liter" for volume).
-   - category: Food category in Norwegian (e.g., "Frukt", "Grønnsak", "Meieriprodukter", "Kjøtt", "Drikke", "Bakevarer").
-   - expirationDate: Estimated expiration date in YYYY-MM-DD format. If unsure, provide a reasonable estimate based on the type of food.
+   - category: Food category in Norwegian (e.g., "Frukt og grønt", "Meieriprodukter", "Kjøtt", "Drikke", "Bakevarer").
+   - calories: Estimated calories per unit, if known. Use null if unknown.
+   - expiration_date: Estimated expiration date in YYYY-MM-DD format. Use null if unsure.
 
 3. If you can identify an item but are unsure about some of its properties, provide your best guess rather than using "unknown".
 4. Only use "unknown" as a last resort when you cannot identify the item at all.
@@ -99,15 +117,17 @@ Example response:
     "name": "Eple",
     "quantity": 3,
     "unit": "stk",
-    "category": "Frukt",
-    "expirationDate": "2024-10-16"
+    "category": "Frukt og grønt",
+    "calories": 52,
+    "expiration_date": "2024-10-16"
   },
   {
     "name": "Melk",
     "quantity": 1,
     "unit": "liter",
     "category": "Meieriprodukter",
-    "expirationDate": "2024-10-10"
+    "calories": 42,
+    "expiration_date": "2024-10-10"
   }
 ]`
         })
@@ -132,17 +152,17 @@ Example response:
         }
       }
 
-      const items: FoodItem[] = parsedItems.map((item: any, index: number) => ({
-        id: `temp-${index}`,
+      const items: FoodItem[] = parsedItems.map((item: any) => ({
+        id: generateId(),
         name: item.name || 'Ukjent vare',
+        category: item.category || '',
+        calories: item.calories !== undefined ? Number(item.calories) : null,
         quantity: parseFloat(item.quantity) || 1,
         unit: item.unit || 'stk',
-        category: item.category || 'Ukategorisert',
-        expirationDate: item.expirationDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         kjoleskap_id: kjoleskapId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        image_url: ''
+        expiration_date: item.expiration_date || null
       }))
       setDetectedItems(items)
       setSelectedItems(new Set(items.map(item => item.id)))
@@ -183,24 +203,24 @@ Example response:
     setEditingItem(itemId)
   }
 
-  const handleUpdateItem = (itemId: string, field: keyof FoodItem, value: string | number) => {
+  const handleUpdateItem = (itemId: string, field: keyof FoodItem, value: string | number | null) => {
     setDetectedItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, [field]: value } : item
+      item.id === itemId ? { ...item, [field]: value, updated_at: new Date().toISOString() } : item
     ))
   }
 
   const handleAddNewItem = () => {
     const newItem: FoodItem = {
-      id: `temp-${detectedItems.length}`,
+      id: generateId(),
       name: '',
+      category: '',
+      calories: null,
       quantity: 1,
       unit: 'stk',
-      category: 'Ukategorisert',
-      expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       kjoleskap_id: kjoleskapId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      image_url: ''
+      expiration_date: null
     }
     setDetectedItems(prev => [...prev, newItem])
     setSelectedItems(prev => new Set(prev).add(newItem.id))
@@ -286,9 +306,15 @@ Example response:
                               />
                             </div>
                             <Input
+                              type="number"
+                              value={item.calories !== null ? item.calories : ''}
+                              onChange={(e) => handleUpdateItem(item.id, 'calories', e.target.value ? Number(e.target.value) : null)}
+                              placeholder="Kalorier"
+                            />
+                            <Input
                               type="date"
-                              value={item.expirationDate}
-                              onChange={(e) => handleUpdateItem(item.id, 'expirationDate', e.target.value)}
+                              value={item.expiration_date || ''}
+                              onChange={(e) => handleUpdateItem(item.id, 'expiration_date', e.target.value || null)}
                             />
                             <Button onClick={() => setEditingItem(null)}>Ferdig</Button>
                           </div>
@@ -296,7 +322,10 @@ Example response:
                           <Label htmlFor={item.id} className="flex-1">
                             {item.name} - {item.quantity} {item.unit} ({item.category})
                             <br />
-                            <span className="text-sm text-gray-500">Utløper: {item.expirationDate}</span>
+                            <span className="text-sm text-gray-500">
+                              Kalorier: {item.calories !== null ? item.calories : 'Ukjent'}
+                              {item.expiration_date && `, Utløper: ${item.expiration_date}`}
+                            </span>
                             <Button variant="ghost" size="sm" onClick={() => handleEditItem(item.id)} className="ml-2">
                               Rediger
                             </Button>
