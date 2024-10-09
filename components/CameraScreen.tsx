@@ -146,15 +146,15 @@ Example of the expected format:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: itemsToAdd, kjoleskapId })
       })
-  
+
       const result = await response.json()
-  
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}, message: ${JSON.stringify(result)}`)
       }
-  
+
       if (result.error) throw new Error(result.error)
-  
+
       onAddItems(result.items)
       toast({
         title: "Suksess",
@@ -172,8 +172,7 @@ Example of the expected format:
       setIsAdding(false)
     }
   }
-  
-  
+
   const handleUpdateItem = (itemId: string, field: keyof FoodItem, value: string | number) => {
     setDetectedItems(prev => prev.map(item => item.id === itemId ? { ...item, [field]: value } : item))
   }

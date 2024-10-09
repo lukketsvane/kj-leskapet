@@ -1,11 +1,16 @@
-import React, { useState } from 'react'
-import { X, Plus } from 'lucide-react'
+"use client"
+
+import React, { useState, useEffect } from 'react'
+import { X, Plus, Check } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { supabase } from '../lib/supabase'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
 interface AddFoodItemScreenProps {
   onClose: () => void;
@@ -20,6 +25,13 @@ interface FoodItem {
   quantity: number;
   unit: string;
   kjoleskap_id: string;
+}
+
+interface FoodItemSuggestion {
+  id: string;
+  name: string;
+  category: string;
+  default_unit: string;
 }
 
 const categories = [
@@ -48,7 +60,40 @@ export const AddFoodItemScreen: React.FC<AddFoodItemScreenProps> = ({ onClose, o
   const [category, setCategory] = useState('')
   const [quantity, setQuantity] = useState('')
   const [unit, setUnit] = useState('')
+  const [suggestions, setSuggestions] = useState<FoodItemSuggestion[]>([])
+  const [open, setOpen] = useState(false)
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (name.length > 1) {
+      searchFoodItems(name)
+    } else {
+      setSuggestions([])
+    }
+  }, [name])
+
+  const searchFoodItems = async (searchTerm: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('food_item_database')
+        .select('id, name, category, default_unit')
+        .ilike('name', `%${searchTerm}%`)
+        .limit(5)
+
+      if (error) throw error
+
+      setSuggestions(data || [])
+    } catch (error) {
+      console.error('Error searching food items:', error)
+    }
+  }
+
+  const handleSelectSuggestion = (suggestion: FoodItemSuggestion) => {
+    setName(suggestion.name)
+    setCategory(suggestion.category)
+    setUnit(suggestion.default_unit)
+    setOpen(false)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,14 +145,46 @@ export const AddFoodItemScreen: React.FC<AddFoodItemScreenProps> = ({ onClose, o
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+          <div className="flex flex-col space-y-1.5">
             <Label htmlFor="food-name">Navn på matvare</Label>
-            <Input
-              id="food-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="F.eks. Melk, Brød, Epler"
-            />
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={open}
+                  className="justify-between"
+                >
+                  {name ? name : "Velg matvare..."}
+                  <X
+                    className="ml-2 h-4 w-4 shrink-0 opacity-50"
+                    onClick={() => setName('')}
+                  />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0">
+                <Command>
+                  <CommandInput placeholder="Søk etter matvare..." onValueChange={setName} />
+                  <CommandEmpty>Ingen matvarer funnet.</CommandEmpty>
+                  <CommandGroup>
+                    {suggestions.map((suggestion) => (
+                      <CommandItem
+                        key={suggestion.id}
+                        onSelect={() => handleSelectSuggestion(suggestion)}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            name === suggestion.name ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {suggestion.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div>
