@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react'
-import { Plus, Grid, List, User, Loader2, Menu, Search, Camera, MapPin } from 'lucide-react'
+import { useSwipeable } from 'react-swipeable'
+import { UserPlus, Plus, Camera, Grid, List, User, Loader2, ChevronLeft, ChevronRight, Menu, Search, Share2, Trash2, X } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Auth } from '@supabase/auth-ui-react'
@@ -10,27 +11,34 @@ import { useToast } from "@/components/ui/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { FoodItemComponent } from './FoodItemComponent'
 import { supabase } from '../lib/supabase'
-import { fetchKjoleskaps, createDefaultKjoleskap, fetchFoodItems } from '@/lib/KjoleskapUtils'
+import { fetchKjoleskaps, createDefaultKjoleskap, fetchFoodItems, fetchSharedKjoleskaps, shareFoodItem } from '@/lib/KjoleskapUtils'
 import { ProfileScreen } from './ProfileScreen'
+import { DeleromScreen } from './DeleromScreen'
 import { AddFoodItemScreen } from './AddFoodItemScreen'
-import CameraScreen from './CameraScreen'
-import NearbyFoodMap from './NearbyFoodMap'
+import CameraScreen  from './CameraScreen'
 import { Kjoleskap, FoodItem, Session } from '../types'
 
 export default function RefrigeratorApp() {
-  const [currentKjoleskap, setCurrentKjoleskap] = useState<Kjoleskap | null>(null)
+  const [currentKjoleskaps, setCurrentKjoleskaps] = useState<Kjoleskap[]>([])
+  const [selectedKjoleskapIndex, setSelectedKjoleskapIndex] = useState(0)
   const [foodItems, setFoodItems] = useState<FoodItem[]>([])
   const [filteredFoodItems, setFilteredFoodItems] = useState<FoodItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sharedKjoleskaps, setSharedKjoleskaps] = useState<Kjoleskap[]>([])
   const [session, setSession] = useState<Session | null>(null)
   const [isGridView, setIsGridView] = useState(true)
   const [showProfile, setShowProfile] = useState(false)
+  const [showDelerom, setShowDelerom] = useState(false)
   const [showAddFoodItem, setShowAddFoodItem] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
-  const [showNearbyMap, setShowNearbyMap] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const { toast } = useToast()
+
+  const handlers = useSwipeable({
+    onSwipedLeft: () => switchKjoleskap(1),
+    onSwipedRight: () => switchKjoleskap(-1),
+  })
 
   useEffect(() => {
     const setupSession = async () => {
@@ -68,8 +76,10 @@ export default function RefrigeratorApp() {
         const defaultKjoleskap = await createDefaultKjoleskap(userId, session?.user?.email ?? '')
         kjoleskaps = [defaultKjoleskap]
       }
-      setCurrentKjoleskap(kjoleskaps[0])
+      setCurrentKjoleskaps(kjoleskaps)
       await fetchFoodItemsForKjoleskap(kjoleskaps[0].id)
+      const shared = await fetchSharedKjoleskaps(userId)
+      setSharedKjoleskaps(shared)
     } catch (error: any) {
       setError('Feil ved henting av data. Vennligst prøv igjen.')
       toast({ title: "Feil", description: error.message, variant: "destructive" })
@@ -88,6 +98,25 @@ export default function RefrigeratorApp() {
     }
   }
 
+  const switchKjoleskap = async (direction: number) => {
+    if (currentKjoleskaps.length === 0) return
+    setLoading(true)
+    const newIndex = (selectedKjoleskapIndex + direction + currentKjoleskaps.length) % currentKjoleskaps.length
+    setSelectedKjoleskapIndex(newIndex)
+    await fetchFoodItemsForKjoleskap(currentKjoleskaps[newIndex].id)
+    setLoading(false)
+  }
+
+  const handleShareFoodItem = async (itemId: string, kjoleskapIds: string[]) => {
+    try {
+      await shareFoodItem(itemId, kjoleskapIds)
+      toast({ title: "Delt", description: "Matvaren er nå delt med valgte kjøleskap." })
+    } catch (error) {
+      console.error('Error sharing food item:', error)
+      toast({ title: "Feil", description: "Kunne ikke dele matvaren. Vennligst prøv igjen.", variant: "destructive" })
+    }
+  }
+
   const handleDeleteFoodItem = async (itemId: string) => {
     try {
       await supabase.from('food_items').delete().eq('id', itemId)
@@ -103,7 +132,7 @@ export default function RefrigeratorApp() {
     try {
       await supabase.auth.signOut()
       setSession(null)
-      setCurrentKjoleskap(null)
+      setCurrentKjoleskaps([])
       setFoodItems([])
       toast({ title: "Logget ut", description: "Du har blitt logget ut av appen." })
     } catch (error) {
@@ -112,14 +141,80 @@ export default function RefrigeratorApp() {
     }
   }
 
+  const handleConnectKjoleskap = async (kjoleskap: Kjoleskap) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No authenticated user')
+
+      const { data, error } = await supabase
+        .from('user_kjoleskaps')
+        .insert([{ user_id: user.id, kjoleskap_id: kjoleskap.id }])
+        .select()
+      
+      if (error) throw error
+      
+      const connectedKjoleskap: Kjoleskap = {
+        ...kjoleskap,
+        user_id: user.id,
+        is_shared: true,
+        is_default: false
+      }
+      
+      setCurrentKjoleskaps(prev => [...prev, connectedKjoleskap])
+      toast({ title: "Suksess", description: `Du er nå koblet til ${kjoleskap.name}.` })
+    } catch (error) {
+      console.error('Error connecting to kjøleskap:', error)
+      toast({ title: "Feil", description: "Kunne ikke koble til kjøleskapet. Vennligst prøv igjen.", variant: "destructive" })
+    }
+  }
+
+  const handleDisconnectKjoleskap = async (kjoleskapId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No authenticated user')
+
+      const { error } = await supabase
+        .from('user_kjoleskaps')
+        .delete()
+        .match({ user_id: user.id, kjoleskap_id: kjoleskapId })
+
+      if (error) throw error
+
+      setCurrentKjoleskaps(prev => prev.filter(k => k.id !== kjoleskapId))
+      toast({ title: "Suksess", description: "Du er nå frakoblet kjøleskapet." })
+    } catch (error) {
+      console.error('Error disconnecting from kjøleskap:', error)
+      toast({ title: "Feil", description: "Kunne ikke koble fra kjøleskapet. Vennligst prøv igjen.", variant: "destructive" })
+    }
+  }
+
   const handleAddFoodItem = (newItem: FoodItem) => {
     setFoodItems(prev => [...prev, newItem])
     toast({ title: "Suksess", description: `${newItem.name} ble lagt til i kjøleskapet.` })
   }
 
-  const handleAddItemsFromCamera = (newItems: FoodItem[]) => {
-    setFoodItems(prev => [...prev, ...newItems])
-    toast({ title: "Suksess", description: `${newItems.length} matvare(r) ble lagt til i kjøleskapet.` })
+  const handleAddItemsFromCamera = async (newItems: FoodItem[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('food_items')
+        .insert(newItems)
+        .select()
+
+      if (error) throw error
+
+      setFoodItems(prev => [...prev, ...data])
+      toast({
+        title:  "Suksess",
+        description: `${newItems.length} matvare(r) ble lagt til i kjøleskapet.`,
+      })
+    } catch (error) {
+      console.error('Error adding items from camera:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til matvarer. Vennligst prøv igjen.",
+        variant: "destructive"
+      })
+    }
   }
 
   if (!session) {
@@ -133,10 +228,30 @@ export default function RefrigeratorApp() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 overflow-hidden text-xs">
+    <div {...handlers} className="flex flex-col h-screen bg-gray-100 overflow-hidden text-xs">
       <header className="bg-white shadow-sm px-2 py-1 flex justify-between items-center">
-        <Button variant="ghost" size="sm"><Menu size={16} /></Button>
-        <h1 className="text-sm font-semibold">{currentKjoleskap?.name || 'Kjøleskap'}</h1>
+        <Button variant="ghost" size="sm" onClick={() => setShowDelerom(true)}><Menu size={16} /></Button>
+        <div className="flex items-center space-x-1">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => switchKjoleskap(-1)} 
+            disabled={loading || currentKjoleskaps.length <= 1}
+            className="p-0.5"
+          >
+            <ChevronLeft size={16} />
+          </Button>
+          <h1 className="text-sm font-semibold">{currentKjoleskaps[selectedKjoleskapIndex]?.name || 'Kjøleskap'}</h1>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => switchKjoleskap(1)} 
+            disabled={loading || currentKjoleskaps.length <= 1}
+            className="p-0.5"
+          >
+            <ChevronRight size={16} />
+          </Button>
+        </div>
         <Button variant="ghost" size="sm" onClick={() => setShowProfile(true)}><User size={16} /></Button>
       </header>
 
@@ -167,22 +282,25 @@ export default function RefrigeratorApp() {
               <FoodItemComponent 
                 key={item.id} 
                 item={item} 
+                onShare={handleShareFoodItem} 
+                sharedKjoleskaps={sharedKjoleskaps} 
                 onDelete={handleDeleteFoodItem}
                 isGridView={isGridView}
               />
             ))}
           </div>
         )}
-        </main>
+      </main>
+
       </div>
 
       <footer className="bg-white shadow-sm px-2 py-1 flex justify-between items-center flex-shrink-0">
         <div className="flex space-x-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowDelerom(true)} aria-label="Delerom">
+            <UserPlus size={16} />
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowCamera(true)} aria-label="Kamera">
             <Camera size={16} />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowNearbyMap(true)} aria-label="Finn i nærheten">
-            <MapPin size={16} />
           </Button>
         </div>
         <div className="flex space-x-2">
@@ -203,27 +321,29 @@ export default function RefrigeratorApp() {
         />
       )}
 
-      {showAddFoodItem && currentKjoleskap && (
+      {showDelerom && (
+        <DeleromScreen 
+          onClose={() => setShowDelerom(false)}
+          onConnect={handleConnectKjoleskap}
+          
+          onDisconnect={handleDisconnectKjoleskap}
+          userKjoleskaps={currentKjoleskaps}
+        />
+      )}
+
+      {showAddFoodItem && (
         <AddFoodItemScreen
           onClose={() => setShowAddFoodItem(false)}
           onAddItem={handleAddFoodItem}
-          kjoleskapId={currentKjoleskap.id}
+          kjoleskapId={currentKjoleskaps[selectedKjoleskapIndex]?.id}
         />
       )}
 
-      {showCamera && currentKjoleskap && (
+      {showCamera && (
         <CameraScreen
           onClose={() => setShowCamera(false)}
           onAddItems={handleAddItemsFromCamera}
-          kjoleskapId={currentKjoleskap.id}
-        />
-      )}
-
-      {showNearbyMap && currentKjoleskap && (
-        <NearbyFoodMap
-          onClose={() => setShowNearbyMap(false)}
-          foodItems={foodItems}
-          currentKjoleskap={currentKjoleskap}
+          kjoleskapId={currentKjoleskaps[selectedKjoleskapIndex]?.id}
         />
       )}
 
