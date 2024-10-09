@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Save, Edit2 } from 'lucide-react'
+import { Save, Edit2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Label } from "@/components/ui/label"
 import { supabase } from '../lib/supabase'
 import { UserProfile, Kjoleskap } from '../types'
+import { useToast } from "@/components/ui/use-toast"
 
 interface ProfileScreenProps {
   onClose: () => void;
@@ -26,6 +27,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onClose, onLogout,
   const [isEditing, setIsEditing] = useState(false)
   const [editedName, setEditedName] = useState('')
   const [editedBio, setEditedBio] = useState('')
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchProfileAndKjoleskaps = async () => {
@@ -54,25 +56,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onClose, onLogout,
         setOwnedKjoleskaps(kjoleskapsData)
       } catch (error) {
         console.error('Error fetching profile or kjoleskaps:', error)
+        toast({
+          title: "Feil",
+          description: "Kunne ikke hente profilinformasjon eller kjøleskap.",
+          variant: "destructive"
+        })
       }
     }
 
     fetchProfileAndKjoleskaps()
-  }, [userId])
+  }, [userId, toast])
 
   const handleSaveProfile = async () => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update({ full_name: editedName, bio: editedBio })
         .eq('id', userId)
+        .select()
+        .single()
 
       if (error) throw error
 
-      setProfile(prev => ({ ...prev!, full_name: editedName, bio: editedBio }))
+      setProfile(data as ExtendedUserProfile)
       setIsEditing(false)
+      toast({
+        title: "Suksess",
+        description: "Profilen din har blitt oppdatert.",
+      })
     } catch (error) {
       console.error('Error updating profile:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke oppdatere profilen. Vennligst prøv igjen.",
+        variant: "destructive"
+      })
     }
   }
 
@@ -81,9 +99,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onClose, onLogout,
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Profil</DialogTitle>
-          <Button variant="ghost" size="icon" onClick={onClose} className="absolute right-4 top-4">
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
         {profile && (
           <div className="space-y-4">

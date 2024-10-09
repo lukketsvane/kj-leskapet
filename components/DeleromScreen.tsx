@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Plus, Minus } from 'lucide-react'
+import { Plus, Minus } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Kjoleskap } from '../types'
 import { supabase } from '../lib/supabase'
+import { useToast } from "@/components/ui/use-toast"
 
 interface DeleromScreenProps {
   onClose: () => void;
@@ -20,24 +21,32 @@ export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect
   const [availableKjoleskaps, setAvailableKjoleskaps] = useState<Kjoleskap[]>([])
   const [newKjoleskapName, setNewKjoleskapName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchAvailableKjoleskaps = async () => {
-      const { data, error } = await supabase
-        .from('kjoleskaps')
-        .select('*')
-        .eq('is_shared', true)
-        .not('id', 'in', `(${userKjoleskaps.map(k => k.id).join(',')})`)
+      try {
+        const { data, error } = await supabase
+          .from('kjoleskaps')
+          .select('*')
+          .eq('is_shared', true)
+          .not('id', 'in', `(${userKjoleskaps.map(k => k.id).join(',')})`)
 
-      if (error) {
-        console.error('Error fetching available kjøleskaps:', error)
-      } else {
+        if (error) throw error
+
         setAvailableKjoleskaps(data || [])
+      } catch (error) {
+        console.error('Error fetching available kjøleskaps:', error)
+        toast({
+          title: "Feil",
+          description: "Kunne ikke hente tilgjengelige kjøleskap.",
+          variant: "destructive"
+        })
       }
     }
 
     fetchAvailableKjoleskaps()
-  }, [userKjoleskaps])
+  }, [userKjoleskaps, toast])
 
   const filteredKjoleskaps = availableKjoleskaps.filter(kjoleskap =>
     kjoleskap.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -61,10 +70,19 @@ export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect
 
       if (error) throw error
 
-      onConnect(data)
+      await onConnect(data)
       setNewKjoleskapName('')
+      toast({
+        title: "Suksess",
+        description: `Nytt kjøleskap "${data.name}" er opprettet.`,
+      })
     } catch (error) {
       console.error('Error creating new kjøleskap:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke opprette nytt kjøleskap. Vennligst prøv igjen.",
+        variant: "destructive"
+      })
     } finally {
       setIsCreating(false)
     }
@@ -75,9 +93,6 @@ export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Delerom</DialogTitle>
-          <Button variant="ghost" size="icon" onClick={onClose} className="absolute right-4 top-4">
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
         <Tabs defaultValue="connect">
           <TabsList className="grid w-full grid-cols-2">
@@ -85,7 +100,7 @@ export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect
             <TabsTrigger value="create">Opprett ny</TabsTrigger>
           </TabsList>
           <TabsContent value="connect">
-            <div className="p-4 space-y-4">
+            <div className="space-y-4">
               <Input
                 placeholder="Søk etter kjøleskap..."
                 value={searchTerm}
@@ -121,7 +136,7 @@ export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect
             </div>
           </TabsContent>
           <TabsContent value="create">
-            <div className="p-4 space-y-4">
+            <div className="space-y-4">
               <Input
                 placeholder="Navn på nytt kjøleskap"
                 value={newKjoleskapName}

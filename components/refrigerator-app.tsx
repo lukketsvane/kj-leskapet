@@ -14,6 +14,7 @@ import { fetchKjoleskaps, createDefaultKjoleskap, fetchFoodItems, fetchSharedKjo
 import { ProfileScreen } from './ProfileScreen'
 import { DeleromScreen } from './DeleromScreen'
 import { AddFoodItemScreen } from './AddFoodItemScreen'
+import { CameraScreen } from './CameraScreen'
 import { Kjoleskap, FoodItem, Session } from '../types'
 
 export default function RefrigeratorApp() {
@@ -28,6 +29,7 @@ export default function RefrigeratorApp() {
   const [showProfile, setShowProfile] = useState(false)
   const [showDelerom, setShowDelerom] = useState(false)
   const [showAddFoodItem, setShowAddFoodItem] = useState(false)
+  const [showCamera, setShowCamera] = useState(false)
   const { toast } = useToast()
 
   const handlers = useSwipeable({
@@ -179,6 +181,30 @@ export default function RefrigeratorApp() {
     toast({ title: "Suksess", description: `${newItem.name} ble lagt til i kjøleskapet.` })
   }
 
+  const handleAddItemsFromCamera = async (newItems: FoodItem[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('food_items')
+        .insert(newItems)
+        .select()
+
+      if (error) throw error
+
+      setFoodItems(prev => [...prev, ...data])
+      toast({
+        title: "Suksess",
+        description: `${newItems.length} matvare(r) ble lagt til i kjøleskapet.`,
+      })
+    } catch (error) {
+      console.error('Error adding items from camera:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til matvarer. Vennligst prøv igjen.",
+        variant: "destructive"
+      })
+    }
+  }
+
   if (!session) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
@@ -223,7 +249,7 @@ export default function RefrigeratorApp() {
         ) : error ? (
           <div className="p-4 text-red-500">{error}</div>
         ) : (
-          <div className={isGridView ? "grid  grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4" : "space-y-2 p-4"}>
+          <div className={isGridView ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4" : "space-y-2 p-4"}>
             {foodItems.map((item) => (
               <FoodItemComponent 
                 key={item.id} 
@@ -239,7 +265,7 @@ export default function RefrigeratorApp() {
 
       <footer className="bg-white shadow-sm p-4 flex justify-center items-center space-x-4">
         <Button variant="ghost" onClick={() => setShowDelerom(true)}><UserPlus size={24} /></Button>
-        <Button variant="ghost" onClick={() => {/* TODO: Implement camera functionality */}}><Camera size={24} /></Button>
+        <Button variant="ghost" onClick={() => setShowCamera(true)}><Camera size={24} /></Button>
         <Button variant="ghost" onClick={() => setShowAddFoodItem(true)}><Plus size={24} /></Button>
         <Button variant="ghost" onClick={() => setIsGridView(!isGridView)}>
           {isGridView ? <List size={24} /> : <Grid size={24} />}
@@ -267,6 +293,14 @@ export default function RefrigeratorApp() {
         <AddFoodItemScreen
           onClose={() => setShowAddFoodItem(false)}
           onAddItem={handleAddFoodItem}
+          kjoleskapId={currentKjoleskaps[selectedKjoleskapIndex]?.id}
+        />
+      )}
+
+      {showCamera && (
+        <CameraScreen
+          onClose={() => setShowCamera(false)}
+          onAddItems={handleAddItemsFromCamera}
           kjoleskapId={currentKjoleskaps[selectedKjoleskapIndex]?.id}
         />
       )}
