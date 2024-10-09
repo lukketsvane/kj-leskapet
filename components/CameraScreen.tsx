@@ -1,13 +1,14 @@
 "use client"
 
 import React, { useState, useRef, ChangeEvent } from 'react'
-import { Camera, X, Check, Loader2, Upload } from 'lucide-react'
+import { Camera, X, Check, Loader2, Upload, AlertTriangle } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
+import { Input } from "@/components/ui/input"
 import { FoodItem } from '../types'
 
 interface CameraScreenProps {
@@ -21,6 +22,7 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
   const [detectedItems, setDetectedItems] = useState<FoodItem[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  const [editingItem, setEditingItem] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -77,30 +79,28 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           image: imageDataUrl,
-          prompt: `Analyze this image of food items and provide a detailed list. For each item:
-          1. Identify the food item.
-          2. Estimate the quantity (use appropriate units like pieces, grams, or milliliters).
-          3. Suggest a category (e.g., Fruit, Vegetable, Dairy, Meat, Beverage, Snack, etc.).
-          4. Estimate an approximate expiration date based on typical shelf life.
-          
-          Format the response as a JSON array of objects, each with 'name', 'quantity', 'unit', 'category', and 'expirationDate' properties. 
-          Example:
-          [
-            {
-              "name": "Apple",
-              "quantity": 3,
-              "unit": "pieces",
-              "category": "Fruit",
-              "expirationDate": "2024-10-16"
-            },
-            {
-              "name": "Milk",
-              "quantity": 1,
-              "unit": "liter",
-              "category": "Dairy",
-              "expirationDate": "2024-10-13"
-            }
-          ]`
+          prompt: `Analyze the image of food items. Return a JSON array if food items are recognized, following these strict rules:
+
+1. Identify each food item.
+2. For each item, provide:
+   - name: Common name (Norwegian if possible).
+   - quantity: Estimate, whole for countable, decimals for measurable.
+   - unit: Relevant unit (e.g., stk, grams, liters).
+   - category: Food category (Frukt, Grønnsak, etc.).
+   - expirationDate: Estimated in YYYY-MM-DD format.
+
+If no food items are identified, return an empty array. Use "unknown" if unsure.
+
+Example:
+[
+  {
+    "name": "Eple",
+    "quantity": 3,
+    "unit": "stk",
+    "category": "Frukt",
+    "expirationDate": "2024-10-16"
+  }
+]`
         })
       })
       
@@ -112,27 +112,23 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
       if (data.error) throw new Error(data.error)
 
       let parsedItems: any[] = []
-      if (typeof data.items === 'string') {
-        // If the response is a string, try to parse it as JSON
+      if (Array.isArray(data.items)) {
+        parsedItems = data.items
+      } else if (typeof data.items === 'string') {
         try {
           parsedItems = JSON.parse(data.items)
         } catch (error) {
           console.error('Error parsing items:', error)
-          throw new Error('Invalid response format from API')
+          parsedItems = []
         }
-      } else if (Array.isArray(data.items)) {
-        // If it's already an array, use it directly
-        parsedItems = data.items
-      } else {
-        throw new Error('Unexpected response format from API')
       }
 
       const items: FoodItem[] = parsedItems.map((item: any, index: number) => ({
         id: `temp-${index}`,
-        name: item.name || 'Unknown Item',
+        name: item.name && item.name !== "unknown" ? item.name : 'Ukjent vare',
         quantity: parseFloat(item.quantity) || 1,
-        unit: item.unit || 'piece',
-        category: item.category || 'Uncategorized',
+        unit: item.unit || 'stk',
+        category: item.category || 'Ukategorisert',
         expirationDate: item.expirationDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         kjoleskap_id: kjoleskapId,
         created_at: new Date().toISOString(),
@@ -169,6 +165,16 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
     const itemsToAdd = detectedItems.filter(item => selectedItems.has(item.id))
     onAddItems(itemsToAdd)
     onClose()
+  }
+
+  const handleEditItem = (itemId: string) => {
+    setEditingItem(itemId)
+  }
+
+  const handleUpdateItem = (itemId: string, field: keyof FoodItem, value: string | number) => {
+    setDetectedItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, [field]: value } : item
+    ))
   }
 
   return (
@@ -213,22 +219,69 @@ export default function CameraScreen({ onClose, onAddItems, kjoleskapId }: Camer
                 </div>
               ) : (
                 <>
-                  <ScrollArea className="h-[200px] w-full border rounded-md p-4">
-                    {detectedItems.map((item) => (
-                      <div key={item.id} className="flex items-center space-x-2 py-2">
-                        <Checkbox
-                          id={item.id}
-                          checked={selectedItems.has(item.id)}
-                          onCheckedChange={() => handleItemToggle(item.id)}
-                        />
-                        <Label htmlFor={item.id}>
-                          {item.name} - {item.quantity} {item.unit} ({item.category})
-                          <br />
-                          <span className="text-sm text-gray-500">Expires: {item.expirationDate}</span>
-                        </Label>
-                      </div>
-                    ))}
-                  </ScrollArea>
+                  {detectedItems.length === 0 ? (
+                    <div className="flex items-center justify-center text-yellow-500">
+                      <AlertTriangle className="mr-2 h-5 w-5" />
+                      <span>Ingen matvarer oppdaget. Prøv å ta et nytt bilde.</span>
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[200px] w-full border rounded-md p-4">
+                      {detectedItems.map((item) => (
+                        <div key={item.id} className="flex items-center space-x-2 py-2">
+                          <Checkbox
+                            id={item.id}
+                            checked={selectedItems.has(item.id)}
+                            onCheckedChange={() => handleItemToggle(item.id)}
+                          />
+                          {editingItem === item.id ? (
+                            <div className="flex-1 space-y-2">
+                              <Input
+                                value={item.name}
+                                onChange={(e) => handleUpdateItem(item.id, 'name', e.target.value)}
+                                placeholder="Navn"
+                              />
+                              <div className="flex space-x-2">
+                                <Input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={(e) => handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value))}
+                                  placeholder="Antall"
+                                  className="w-1/3"
+                                />
+                                <Input
+                                  value={item.unit}
+                                  onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)}
+                                  placeholder="Enhet"
+                                  className="w-1/3"
+                                />
+                                <Input
+                                  value={item.category}
+                                  onChange={(e) => handleUpdateItem(item.id, 'category', e.target.value)}
+                                  placeholder="Kategori"
+                                  className="w-1/3"
+                                />
+                              </div>
+                              <Input
+                                type="date"
+                                value={item.expirationDate}
+                                onChange={(e) => handleUpdateItem(item.id, 'expirationDate', e.target.value)}
+                              />
+                              <Button onClick={() => setEditingItem(null)}>Ferdig</Button>
+                            </div>
+                          ) : (
+                            <Label htmlFor={item.id} className="flex-1">
+                              {item.name} - {item.quantity} {item.unit} ({item.category})
+                              <br />
+                              <span className="text-sm text-gray-500">Utløper: {item.expirationDate}</span>
+                              <Button variant="ghost" size="sm" onClick={() => handleEditItem(item.id)} className="ml-2">
+                                Rediger
+                              </Button>
+                            </Label>
+                          )}
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  )}
                   <div className="flex justify-between">
                     <Button variant="outline" onClick={() => {
                       setCapturedImage(null)
