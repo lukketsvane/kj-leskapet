@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Minus } from 'lucide-react'
+import { X, Plus, Search, Trash2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Kjoleskap } from '../types'
+import { useToast } from "@/hooks/use-toast"
 import { supabase } from '../lib/supabase'
-import { useToast } from "@/components/ui/use-toast"
+
+interface Kjoleskap {
+  id: string;
+  name: string;
+  is_shared: boolean;
+}
 
 interface DeleromScreenProps {
   onClose: () => void;
@@ -17,138 +22,185 @@ interface DeleromScreenProps {
 }
 
 export const DeleromScreen: React.FC<DeleromScreenProps> = ({ onClose, onConnect, onDisconnect, userKjoleskaps }) => {
+  const [allKjoleskaps, setAllKjoleskaps] = useState<Kjoleskap[]>([])
+  const [filteredKjoleskaps, setFilteredKjoleskaps] = useState<Kjoleskap[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [availableKjoleskaps, setAvailableKjoleskaps] = useState<Kjoleskap[]>([])
   const [newKjoleskapName, setNewKjoleskapName] = useState('')
-  const [isCreating, setIsCreating] = useState(false)
+  const [isAddingKjoleskap, setIsAddingKjoleskap] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
-    const fetchAvailableKjoleskaps = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('kjoleskaps')
-          .select('*')
-          .eq('is_shared', true)
-          .not('id', 'in', `(${userKjoleskaps.map(k => k.id).join(',')})`)
+    fetchAllKjoleskaps()
+  }, [])
 
-        if (error) throw error
+  useEffect(() => {
+    const filtered = allKjoleskaps.filter(kjoleskap => 
+      kjoleskap.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    setFilteredKjoleskaps(filtered)
+  }, [searchTerm, allKjoleskaps])
 
-        setAvailableKjoleskaps(data || [])
-      } catch (error) {
-        console.error('Error fetching available kjøleskaps:', error)
-        toast({
-          title: "Feil",
-          description: "Kunne ikke hente tilgjengelige kjøleskap.",
-          variant: "destructive"
-        })
-      }
-    }
-
-    fetchAvailableKjoleskaps()
-  }, [userKjoleskaps, toast])
-
-  const filteredKjoleskaps = availableKjoleskaps.filter(kjoleskap =>
-    kjoleskap.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  const handleCreateKjoleskap = async () => {
-    if (!newKjoleskapName.trim()) return
-
-    setIsCreating(true)
+  const fetchAllKjoleskaps = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('No authenticated user')
-
       const { data, error } = await supabase
         .from('kjoleskaps')
-        .insert([
-          { name: newKjoleskapName, user_id: user.id, is_shared: false, is_default: false }
-        ])
-        .select()
-        .single()
-
+        .select('*')
+        .eq('is_shared', true)
+      
       if (error) throw error
-
-      await onConnect(data)
-      setNewKjoleskapName('')
-      toast({
-        title: "Suksess",
-        description: `Nytt kjøleskap "${data.name}" er opprettet.`,
-      })
+      setAllKjoleskaps(data || [])
     } catch (error) {
-      console.error('Error creating new kjøleskap:', error)
+      console.error('Error fetching kjoleskaps:', error)
       toast({
         title: "Feil",
-        description: "Kunne ikke opprette nytt kjøleskap. Vennligst prøv igjen.",
-        variant: "destructive"
+        description: "Kunne ikke hente kjøleskap. Vennligst prøv igjen.",
+        variant: "destructive",
       })
-    } finally {
-      setIsCreating(false)
     }
   }
 
+  const handleAddKjoleskap = async () => {
+    if (!newKjoleskapName.trim()) return
+
+    try {
+      const { data, error } = await supabase
+        .from('kjoleskaps')
+        .insert([{ name: newKjoleskapName, is_shared: true }])
+        .select()
+
+      if (error) throw error
+
+      if (data && data[0]) {
+        setAllKjoleskaps([...allKjoleskaps, data[0]])
+        setNewKjoleskapName('')
+        setIsAddingKjoleskap(false)
+        toast({
+          title: "Suksess",
+          description: `${newKjoleskapName} ble lagt til i delerom.`,
+        })
+      }
+    } catch (error) {
+      console.error('Error adding kjoleskap:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke legge til kjøleskapet. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleConnect = async (kjoleskap: Kjoleskap) => {
+    if (isConnecting) return
+    setIsConnecting(true)
+    try {
+      await onConnect(kjoleskap)
+      toast({
+        title: "Suksess",
+        description: `Du er nå koblet til ${kjoleskap.name}.`,
+      })
+    } catch (error) {
+      console.error('Error connecting to kjoleskap:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke koble til kjøleskapet. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsConnecting(false)
+    }
+  }
+
+  const handleDisconnect = async (kjoleskapId: string) => {
+    try {
+      await onDisconnect(kjoleskapId)
+      toast({
+        title: "Suksess",
+        description: "Du er nå frakoblet kjøleskapet.",
+      })
+    } catch (error) {
+      console.error('Error disconnecting from kjoleskap:', error)
+      toast({
+        title: "Feil",
+        description: "Kunne ikke koble fra kjøleskapet. Vennligst prøv igjen.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const isConnected = (kjoleskapId: string) => {
+    return userKjoleskaps.some(uk => uk.id === kjoleskapId)
+  }
+
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Kjøleskap</DialogTitle>
-        </DialogHeader>
-        <Tabs defaultValue="connect">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="connect">Koble til</TabsTrigger>
-            <TabsTrigger value="create">Opprett ny</TabsTrigger>
-          </TabsList>
-          <TabsContent value="connect">
-            <div className="space-y-4">
-              <Input
-                placeholder="Søk etter kjøleskap..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-2">
-                  {filteredKjoleskaps.map((kjoleskap) => (
-                    <div key={kjoleskap.id} className="flex justify-between items-center">
-                      <span>{kjoleskap.name}</span>
-                      <Button size="sm" onClick={() => onConnect(kjoleskap)}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-              <div className="mt-4">
-                <h3 className="text-lg font-semibold mb-2">Dine tilkoblede kjøleskap</h3>
-                <ScrollArea className="h-[150px]">
-                  <div className="space-y-2">
-                    {userKjoleskaps.map((kjoleskap) => (
-                      <div key={kjoleskap.id} className="flex justify-between items-center">
-                        <span>{kjoleskap.name}</span>
-                        <Button size="sm" variant="destructive" onClick={() => onDisconnect(kjoleskap.id)}>
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Delerom</h2>
+          <Button variant="ghost" onClick={onClose}>
+            <X size={24} />
+          </Button>
+        </div>
+
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Input
+              type="text"
+              placeholder="Søk etter kjøleskap..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
+        <ScrollArea className="h-64 mb-4">
+          {filteredKjoleskaps.length === 0 ? (
+            <p className="text-center text-gray-500">Ingen kjøleskap funnet</p>
+          ) : (
+            filteredKjoleskaps.map((kjoleskap) => (
+              <div key={kjoleskap.id} className="flex justify-between items-center mb-2 p-2 bg-gray-100 rounded">
+                <p className="font-semibold">{kjoleskap.name}</p>
+                {isConnected(kjoleskap.id) ? (
+                  <Button variant="destructive" size="sm" onClick={() => handleDisconnect(kjoleskap.id)}>
+                    <Trash2 size={16} className="mr-1" /> Fjern
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => handleConnect(kjoleskap)} disabled={isConnecting}>
+                    <Plus size={16} className="mr-1" /> Koble til
+                  </Button>
+                )}
               </div>
-            </div>
-          </TabsContent>
-          <TabsContent value="create">
-            <div className="space-y-4">
+            ))
+          )}
+        </ScrollArea>
+
+        <Dialog open={isAddingKjoleskap} onOpenChange={setIsAddingKjoleskap}>
+          <DialogTrigger asChild>
+            <Button className="w-full">
+              <Plus size={16} className="mr-2" /> Legg til nytt kjøleskap
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Legg til nytt kjøleskap</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="new-kjoleskap-name">Navn på kjøleskap</Label>
               <Input
-                placeholder="Navn på nytt kjøleskap"
+                id="new-kjoleskap-name"
                 value={newKjoleskapName}
                 onChange={(e) => setNewKjoleskapName(e.target.value)}
+                placeholder="Skriv inn navn..."
               />
-              <Button onClick={handleCreateKjoleskap} disabled={isCreating || !newKjoleskapName.trim()}>
-                {isCreating ? 'Oppretter...' : 'Opprett nytt kjøleskap'}
-              </Button>
             </div>
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+            <DialogFooter>
+              <Button onClick={handleAddKjoleskap}>Legg til</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
   )
 }

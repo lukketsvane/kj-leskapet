@@ -15,8 +15,8 @@ import { fetchKjoleskaps, createDefaultKjoleskap, fetchFoodItems, fetchSharedKjo
 import { ProfileScreen } from './ProfileScreen'
 import { DeleromScreen } from './DeleromScreen'
 import { AddFoodItemScreen } from './AddFoodItemScreen'
-import CameraScreen  from './CameraScreen'
-import NearbyFoodMap from './NearbyFoodMap'
+import { CameraScreen } from './CameraScreen'
+import  NearbyFoodMap from './NearbyFoodMap'
 import { Kjoleskap, FoodItem, Session } from '../types'
 
 export default function RefrigeratorApp() {
@@ -206,7 +206,7 @@ export default function RefrigeratorApp() {
 
       setFoodItems(prev => [...prev, ...data])
       toast({
-        title:  "Suksess",
+        title: "Suksess",
         description: `${newItems.length} matvare(r) ble lagt til i kjøleskapet.`,
       })
     } catch (error) {
@@ -309,7 +309,8 @@ export default function RefrigeratorApp() {
           <Button variant="ghost" size="sm" onClick={() => setShowAddFoodItem(true)} aria-label="Legg til matvare">
             <Plus size={16} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setIsGridView(!isGridView)}   aria-label="Endre visning">
+          <Button variant="ghost" size="sm" onClick={() => setIsGridView(!isGridView)} aria-label="Endre visning">
+            
             {isGridView ? <List size={16} /> : <Grid size={16} />}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowNearbyMap(true)} aria-label="Vis kart">

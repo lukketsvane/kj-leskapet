@@ -182,6 +182,7 @@ Example of the expected format:
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
+          <DialogTitle>Legg til matvarer med bilde</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {!capturedImage ? (
@@ -189,7 +190,7 @@ Example of the expected format:
               <video ref={videoRef} autoPlay playsInline className="w-full h-64 bg-black" />
               <div className="flex justify-between">
                 <Button onClick={() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => { if (videoRef.current) videoRef.current.srcObject = stream })} className="w-1/2 mr-2">
-                  <Camera className="mr-2  w-4" /> Start kamera
+                  <Camera className="mr-2 h-4 w-4" /> Start kamera
                 </Button>
                 <Button onClick={() => fileInputRef.current?.click()} className="w-1/2 ml-2">
                   <Upload className="mr-2 h-4 w-4" /> Last opp bilde
@@ -218,12 +219,12 @@ Example of the expected format:
                   ) : (
                     <ScrollArea className="h-[200px] w-full border rounded-mdp-2">
                       {detectedItems.map((item) => (
-                        <div key={item.id} className="flex items-center space-x-2 ">
+                        <div key={item.id} className="flex items-center space-x-2 py-2">
                           <Checkbox id={item.id} checked={selectedItems.has(item.id)} onCheckedChange={() => handleItemToggle(item.id)} />
                           {editingItem === item.id ? (
-                            <div className="flex-1 ">
+                            <div className="flex-1 space-y-2">
                               <Input value={item.name} onChange={(e) => handleUpdateItem(item.id, 'name', e.target.value)} placeholder="Navn" />
-                              <div className="flex-1">
+                              <div className="flex space-x-2">
                                 <Input type="number" value={item.quantity} onChange={(e) => handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value))} placeholder="Antall" className="w-1/3" />
                                 <Input value={item.unit} onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)} placeholder="Enhet" className="w-1/3" />
                                 <Input value={item.category} onChange={(e) => handleUpdateItem(item.id, 'category', e.target.value)} placeholder="Kategori" className="w-1/3" />
